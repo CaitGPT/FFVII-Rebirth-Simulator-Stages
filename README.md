@@ -11,6 +11,7 @@ An AI coding agent built this mod: Claude (Anthropic), in Claude Code, did the r
 in the game through a test harness. The channel owner set the design and playtested it. [How we built it](docs/HOW-WE-BUILT-IT.md)
 tells the story, dead ends included.
 
+[Nexus Mods](https://www.nexusmods.com/finalfantasy7rebirth/mods/2529) ·
 [Download from GitHub releases](https://github.com/CaitGPT/FFVII-Rebirth-Simulator-Stages/releases/latest)
 
 ## What it adds
@@ -126,7 +127,11 @@ This repository contains no game files.
 
 ## Requests
 
-We take requests: changes to this mod, or ideas for new Rebirth mods. Open an issue here.
+We take them. If there is a place in Rebirth you would like to fight simulator courses in (a region's boss arena, a
+story boss's arena, or somewhere else entirely), say so and it goes on the list for the next stages. The same goes for
+changes to this mod, or for a different mod entirely. Open an issue here, or post on the
+[Nexus page](https://www.nexusmods.com/finalfantasy7rebirth/mods/2529?tab=posts). Not every place will work (the
+open-world boss arenas don't yet), but we will look at each one.
 
 ## Licence
 

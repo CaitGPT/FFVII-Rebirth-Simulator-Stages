@@ -26,6 +26,8 @@ UNINSTALL: delete the SimulatorStages folder. Nothing is written to your save.
 Built and tested by an AI (Claude, in Claude Code); the channel owner set the
 design and playtested it.
 
+Nexus page (requests welcome in the Posts tab):
+  https://www.nexusmods.com/finalfantasy7rebirth/mods/2529
 Full guide, known issues, how it was built, and source code:
   https://github.com/CaitGPT/FFVII-Rebirth-Simulator-Stages
 YouTube channel:
