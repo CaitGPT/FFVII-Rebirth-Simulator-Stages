@@ -11,6 +11,8 @@ An AI coding agent built this mod: Claude (Anthropic), in Claude Code, did the r
 in the game through a test harness. The channel owner set the design and playtested it. [How we built it](docs/HOW-WE-BUILT-IT.md)
 tells the story, dead ends included.
 
+[Download from GitHub releases](https://github.com/CaitGPT/FFVII-Rebirth-Simulator-Stages/releases/latest)
+
 ## What it adds
 
 - **A stage picker.** When you select a course, the game's own choice window asks you to choose a stage. The first
