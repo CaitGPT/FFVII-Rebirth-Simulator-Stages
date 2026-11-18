@@ -5,9 +5,17 @@ Fight Chadley's Combat Simulator courses on other stages. Select a course and th
 game's own choice window asks you to choose a stage:
   Edge of Creation       - the rock platform among floating rocks in space
   Inside the Lifestream  - the silver water under a starry sky
-Both are from the final battle and unlock once you have finished the game.
-(Spoiler note: the stage names come from the final battle.)
+  Gilgamesh's Garden     - the garden of Gilgamesh's legendary trials
+  Mythril Mine           - where the Mythril Golem is fought
+  Cave of the Gi         - where Gi Nattak is fought
+  Shinra Manor           - the basement where the Galian Beast is fought
+The first two are from the final battle and unlock once you have finished the
+game; Gilgamesh's Garden once his quests are complete; the other three as the
+story reaches them. (Spoiler note: the stages come from the story.)
+A stage is offered only for courses whose enemies have room on it.
 The choice is remembered for each course.
+
+TO UPDATE from 1.0.0, extract over the old folder.
 
 REQUIRES: game version 1.005 (tested on the Epic Games Store version) and
 RE-UE4SS FF7R (UE4SS 3.0.1) with a fix for 1.005, such as our UE4SS 1.005 Fix:
