@@ -109,6 +109,57 @@ That change brought one regression: on some later visits the Lifestream looked d
 stage's lights came on while the simulator's lighting was still showing, the scene stayed dull after the simulator's
 lighting went. The stage's lights now wait for it.
 
+## Version 1.1.0: four more stages
+
+The owner asked for more stages in order of how easy they would be. Gilgamesh's Garden came first and was nearly free:
+the game ships it as a second look for the simulator's own level, centred in the same place.
+
+The story arenas were harder, because an interior is more than its terrain. Each needed its props and doors (the
+`Gimmick` and `Physics` levels), its floor and wall collision (grid levels picked by cell), and the right light. The
+first Shinra Manor had a square pit in the middle that the boss fight does not have: a floor door that the fight
+shows, which arrives hidden. Mythril Mine, Cave of the Gi and the Temple of the Ancients followed.
+
+Then the owner played them and sent a list. The sides of the manor and the cave were dark; there were invisible walls
+inside the arenas; loading was slow; the Temple's Lifestream ribbons were missing and its floor ran on past two edges;
+and on arrival the screen flickered from the simulator to the stage.
+
+- **Dark sides.** An indoor room in this game is still lit by its region's sky: its sun, fog and reflection capture.
+  Loading Nibelheim's night sky with the manor and the mountain cave sky with the cave lit their walls as in the boss
+  fights. Later the owner sent a screenshot of the Mythril Golem fight in which the party is lit, where ours were
+  almost silhouettes. The mine was the one interior loaded without its area's main light level; reading the area's
+  streaming volumes from the game's files showed which light and time-set levels the game loads there.
+- **Invisible walls.** Hiding the simulator's pillars and walls left their collision. They now stop colliding, and on
+  the interiors so does the simulator's flat floor, so the party stands on the room's own floor.
+- **Slow loading.** The engine adds and removes a level's parts a few at a time each frame. The mod raises those limits
+  while a stage loads and unloads, and unloads in the background once the player is back at the course list.
+- **Flicker.** The game ends its own loading screen when its own levels are in, whatever ours are doing. Holding the
+  loading screen blocked one of the manor's levels from loading; a camera fade and slowing the clock did nothing. The
+  game's own menu fade, put up black on arrival and lifted when the stage is set up, works.
+- **A queue limit.** The helper holds 64 unanswered requests. The Temple had 67 levels; its last three, the sky among
+  them, were refused, and the sky stayed loaded after the visit, turning every later stage white. Requests now go 48
+  at a time.
+- **The Temple.** Its missing floor pieces are skeletal meshes that the cutscene before the fight moves into place, and
+  its Lifestream ribbons are effects the story spawns. Neither is placed in a level, and loading them would need assets
+  from disk that UE4SS's Lua cannot load on this game. The owner cut the stage.
+
+## The crashes
+
+The game crashed every hour or two with the same fault inside UE4SS. Disassembled, the faulting code reads an object's
+index: UE4SS's check of whether an object is still valid. A Lua mod kept an object, the game destroyed it and freed its
+memory, and the mod asked whether it was still valid. This mod kept the simulator's levels from one visit to the next;
+that was fixed first. One more crash came a second into an arrival: within a visit, the mod kept the simulator's level
+streams while the game was still loading and could replace them. They are now found again by path each time.
+
+Finding an object again by path turned out to work only for level streams; actors, widgets and volumes are not found
+that way in this game. Before release the stages ran back to back on summon and regional courses: 43 stage loads
+with no crash during a visit. Earlier that day the game had crashed about 9 times over 64 stage loads, not all
+of them during a visit. The same kind of fault also
+happens with no stage loaded, so other mods that keep objects across frames can cause it too.
+
+The test runs had their own problems, which the owner spotted: the game froze for half a second every three seconds
+during fights. That was our test driver asking the harness which simulator screen was showing; with no menu open, that
+question searches every widget in the game. The driver now asks only while a menu is open.
+
 ## Tools
 
 | Tool | Used for |
@@ -121,9 +172,10 @@ lighting went. The stage's lights now wait for it.
 
 ## What we know does not work yet
 
-- The boss arenas: their ground does not draw when loaded elsewhere.
-- On a later visit in the same session the simulator's stage may show for up to a second; we have not captured it.
+- The regional and open-world boss arenas: their ground does not draw when loaded elsewhere.
+- The Temple of the Ancients: its floor pieces and sky effects are placed by the story, not by its levels.
 - The rock reaches past the arena's wall by up to 6 m in places and sits slightly low along part of one edge.
+- The Mythril Mine is still a little darker than the boss fight.
 - Tested on the Epic Games Store version only.
 
 ## Credits

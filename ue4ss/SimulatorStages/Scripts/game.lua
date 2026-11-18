@@ -23,6 +23,29 @@ end
 local function valid(object)
     return object ~= nil and safe(function() return object:IsValid() end) == true
 end
+-- Never ask a kept object whether it is still valid once the game may have destroyed it: UE4SS reads the object's
+-- memory to answer, and if the game has freed that memory the game crashes (UE4SS.dll+0x6a8c4f, reading the object's
+-- InternalIndex; six crashes on 2026-11-18, two of them at this mod's check of the last visit's simulator levels, and
+-- one more at 17:31 the same day a second into an arrival, after objects were no longer kept from one visit to the next:
+-- the game can also replace an object within a visit, while it loads).
+-- So a level stream is never kept as an object past the moment it was found, not even for a tick: it is kept as a
+-- reference, its path and address, and `fresh` finds it again by its path (StaticFindObject never touches the old
+-- pointer) and returns it only if it is the same object. Only streams can be found this way: they hang straight off
+-- the world (`/Game/Level/Game/EndGame.EndGame:LevelStreamingDynamic_1`). An actor in a level, the level itself, a
+-- widget or a volume in a world plan is not found by its path in this game (tried 2026-11-18), so `fresh` returns nil
+-- for those: the actors this mod keeps are found only once the loader is idle and used only within that visit, and
+-- whatever is put back after a visit is put back only if it can be found (see `set_dressing_hidden`).
+local function ref(object)
+    local name = safe(function() return object:GetFullName() end)
+    return { path = name and name:match("^%S+ (.+)$"), address = safe(function() return object:GetAddress() end) }
+end
+local function fresh(kept)
+    if not (kept and kept.path) then return nil end
+    local object = safe(StaticFindObject, kept.path)
+    if not valid(object) then return nil end
+    if kept.address and safe(function() return object:GetAddress() end) ~= kept.address then return nil end
+    return object
+end
 local function cdo(path)
     local object = safe(StaticFindObject, path)
     if valid(object) then return object end
@@ -120,7 +143,7 @@ local function find_simulator_levels(vr_stage)
             end
             if which and not seen[which] then
                 seen[which] = true
-                simulator_levels[#simulator_levels + 1] = { stream = stream, which = which }
+                simulator_levels[#simulator_levels + 1] = { stream = ref(stream), which = which }
             end
         end
     end
@@ -128,22 +151,55 @@ local function find_simulator_levels(vr_stage)
 end
 function M.simulator_shown(vr_stage, now)
     local expected, have = #vr_stage.dressing_levels + 1, 0
+    local streams = {}
     for _, entry in ipairs(simulator_levels) do
-        if valid(entry.stream) then have = have + 1 end
+        local stream = fresh(entry.stream)
+        if stream then
+            have = have + 1
+            streams[#streams + 1] = stream
+        end
     end
     if have < expected then
         if simulator_searched_at == now then return false, have end
         simulator_searched_at = now
         have = find_simulator_levels(vr_stage)
         if have < expected then return false, have end
+        streams = {}
+        for _, entry in ipairs(simulator_levels) do
+            local stream = fresh(entry.stream)
+            if not stream then return false, have end
+            streams[#streams + 1] = stream
+        end
     end
-    for _, entry in ipairs(simulator_levels) do
-        if safe(function() return entry.stream:IsLevelLoaded() end) ~= true
-            or safe(function() return entry.stream:IsLevelVisible() end) ~= true then
+    for _, stream in ipairs(streams) do
+        if safe(function() return stream:IsLevelLoaded() end) ~= true
+            or safe(function() return stream:IsLevelVisible() end) ~= true then
             return false, have
         end
     end
     return true, have
+end
+
+-- A black screen of the game's own (UEndMenuAPI.AddFadeFilter, the overlay its menus fade with) over everything but the
+-- HUD of other mods. Without it the Temple's arrival showed the simulator for 3 s, then a darkened simulator and the
+-- swap for 6 s (2026-11-18).
+-- `on` true puts it up at once; false fades it out over `seconds` and lets the game drop it.
+local BLACK_FILTER = "SimStagesBlack"
+local black_up = false
+function M.black_screen(on, seconds)
+    local api = StaticFindObject("/Script/EndGame.Default__EndMenuAPI")
+    if not valid(api) then return false end
+    local black, clear = { R = 0, G = 0, B = 0, A = 1 }, { R = 0, G = 0, B = 0, A = 0 }
+    if on then
+        if black_up then return true end
+        local context = safe(FindFirstOf, "PlayerController")
+        if not valid(context) then return false end
+        black_up = pcall(function() api:AddFadeFilter(context, FName(BLACK_FILTER), 9000, black, black, 0.0, false, false) end)
+        return black_up
+    end
+    if not black_up then return false end
+    black_up = false
+    return pcall(function() api:ChangeFadeFilter(FName(BLACK_FILTER), clear, seconds or 0.4, true, false) end)
 end
 
 -- What makes up the simulator's own look, found ahead of the moment it goes and kept, so that moment only flips
@@ -159,12 +215,16 @@ function M.scenery_present(vr_stage)
     return false
 end
 function M.prepare_dressing(vr_stage)
-    local found = { actors = {}, components = {}, collision = {} }
+    local found = { actors = {}, components = {}, collision = {}, ground = {} }
     for _, actor in ipairs(safe(FindAllOf, "CollisionAssetActor") or {}) do
         if valid(actor) then
             local name = safe(function() return actor:GetFullName() end) or ""
-            if name:find(vr_stage.collision_level, 1, true) and name:find(RIM_COLLISION, 1, true) then
-                found.collision[#found.collision + 1] = actor
+            if name:find(vr_stage.collision_level, 1, true) then
+                if name:find(RIM_COLLISION, 1, true) then
+                    found.collision[#found.collision + 1] = actor
+                else
+                    found.ground[#found.ground + 1] = actor -- the flat floor, kept unless the stage has its own
+                end
             end
         end
     end
@@ -185,26 +245,125 @@ function M.prepare_dressing(vr_stage)
     return #found.actors + #found.components + #found.collision
 end
 
+-- Level streaming's per-frame budgets. The engine's defaults add and remove a level's components a few at a time in
+-- about 1 to 5 ms a frame, which made leaving the Cave of the Gi (66 levels) take 79 s back to the course list against
+-- 43 s from the plain simulator; with these raised it took 53 s, and its levels were in 8 s after arrival instead of
+-- 11 (measured 2026-11-18). Raised only while a stage loads or unloads, then put back to the game's own values: in
+-- the field the game streams all the time, and big budgets there would cost frames.
+local FAST_STREAMING = {
+    ["s.UnregisterComponentsTimeLimit"] = 20, ["s.LevelStreamingComponentsUnregistrationGranularity"] = 100,
+    ["s.LevelStreamingActorsUpdateTimeLimit"] = 20, ["s.LevelStreamingComponentsRegistrationGranularity"] = 100,
+    ["s.AsyncLoadingTimeLimit"] = 20,
+}
+local saved_streaming = nil
+function M.fast_streaming(on)
+    local library = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(library) then return false end
+    local context = safe(FindFirstOf, "PlayerController")
+    if not valid(context) then return false end
+    local function set(name, value)
+        return pcall(function() library:ExecuteConsoleCommand(context, name .. " " .. tostring(value), nil) end)
+    end
+    -- Reading a console variable runs game code that can re-enter this mod: work on local copies only.
+    if on then
+        if not saved_streaming then
+            local saved = {}
+            for name in pairs(FAST_STREAMING) do
+                saved[name] = safe(function() return library:GetConsoleVariableFloatValue(name) end)
+            end
+            saved_streaming = saved
+        end
+        for name, value in pairs(FAST_STREAMING) do set(name, value) end
+        return true
+    end
+    local saved = saved_streaming
+    if not saved then return false end
+    saved_streaming = nil
+    for name, value in pairs(saved) do
+        if type(value) == "number" and value > 0 then set(name, value) end
+    end
+    return true
+end
+
+-- Unloading in the background, at the game's own streaming budgets, while the player is back at the course list. With
+-- the raised budgets the unload and then the engine's garbage collection of 77 levels at once stalled the game for 1
+-- to 1.8 s at a time in the menu (the owner: "laggy with input", 2026-11-18). While on, the engine collects a little
+-- every frame while levels wait to be purged (s.ContinuouslyIncrementalGCWhileLevelsPendingPurge) instead of all at
+-- once; off puts the game's own value back.
+local GC_SPREAD = "s.ContinuouslyIncrementalGCWhileLevelsPendingPurge"
+local saved_gc = nil
+function M.background_unload(on)
+    local library = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    if not valid(library) then return false end
+    local context = safe(FindFirstOf, "PlayerController")
+    if not valid(context) then return false end
+    if on then
+        if saved_gc == nil then
+            saved_gc = safe(function() return library:GetConsoleVariableFloatValue(GC_SPREAD) end) or 0
+        end
+        return pcall(function() library:ExecuteConsoleCommand(context, GC_SPREAD .. " 1", nil) end)
+    end
+    local saved = saved_gc
+    if saved == nil then return false end
+    saved_gc = nil
+    return pcall(function() library:ExecuteConsoleCommand(context, GC_SPREAD .. " " .. tostring(math.floor(saved)), nil) end)
+end
+
+-- The simulator's hidden floor, pillars and walls still collide when hidden: its pillars and walls are invisible walls
+-- about 24 m out, inside the real edge of a larger stage, and its flat floor runs on past a stage's own edges (owner,
+-- 2026-11-18). The game keeps fighters inside the battle area by itself (a fighter put past the Temple's edge was back
+-- on it within 1.5 s), so the pillars and walls are dropped for every streamed stage; the floor only for a stage with
+-- its own (`with_floor`). Put back with the rest of the look (set_dressing_hidden false). Returns how many actors.
+local FLOOR_CLASS = "BG0342_00_Floor_VR_C"
+function M.drop_simulator_collision(with_floor)
+    if not dressing_ready then return 0 end
+    local count = 0
+    local function drop(actor)
+        if valid(actor) and pcall(function() actor:SetActorEnableCollision(false) end) then
+            local key = tostring(safe(function() return actor:GetAddress() end) or actor)
+            if not hidden_seen["ground:" .. key] then
+                hidden_seen["ground:" .. key] = true
+                collision_off[#collision_off + 1] = ref(actor)
+            end
+            count = count + 1
+        end
+    end
+    for _, actor in ipairs(dressing_ready.actors) do
+        local class = safe(function() return actor:GetClass():GetFName():ToString() end) or ""
+        if with_floor or class ~= FLOOR_CLASS then drop(actor) end
+    end
+    if with_floor then
+        for _, actor in ipairs(dressing_ready.ground) do drop(actor) end
+    end
+    return count
+end
+
 -- `what`: "scenery" hides only the actors, skyline and rim collision (safe at any time: no level's state changes);
 -- nil hides those and the simulator's lighting, effect and sky levels.
 function M.set_dressing_hidden(vr_stage, hidden, sky_too, what)
     local count = 0
     if not hidden then
         -- Show exactly what was hidden, from the kept references: no search while the game loads its way out.
-        for _, actor in ipairs(hidden_actors) do
-            if valid(actor) and pcall(function() actor:SetActorHiddenInGame(false) end) then count = count + 1 end
+        -- From references found again by path: by now the game may have destroyed them (it makes the simulator's
+        -- levels anew on every visit), and then there is nothing to put back.
+        for _, kept in ipairs(hidden_actors) do
+            local actor = fresh(kept)
+            if actor and pcall(function() actor:SetActorHiddenInGame(false) end) then count = count + 1 end
         end
-        for _, stream in ipairs(hidden_streams) do
-            if valid(stream) and pcall(function() stream:SetShouldBeVisible(true) end) then count = count + 1 end
+        for _, kept in ipairs(hidden_streams) do
+            local stream = fresh(kept)
+            if stream and pcall(function() stream:SetShouldBeVisible(true) end) then count = count + 1 end
         end
-        for _, component in ipairs(hidden_components) do
-            if valid(component) and pcall(function()
+        for _, kept in ipairs(hidden_components) do
+            local component = fresh(kept)
+            if component and pcall(function()
                 component:SetHiddenInGame(false, true)
                 component:SetVisibility(true, true)
             end) then count = count + 1 end
         end
-        for _, actor in ipairs(collision_off) do
-            if valid(actor) and pcall(function() actor:SetActorEnableCollision(true) end) then count = count + 1 end
+        for _, kept in ipairs(collision_off) do
+            local actor = fresh(kept)
+            if actor and pcall(function() actor:SetActorEnableCollision(true) end) then count = count + 1 end
         end
         hidden_actors, hidden_streams, hidden_components, collision_off = {}, {}, {}, {}
         hidden_seen, dressing_ready = {}, nil
@@ -213,11 +372,11 @@ function M.set_dressing_hidden(vr_stage, hidden, sky_too, what)
     -- Hide from what was found beforehand; search now only if nothing was (that is the slow path).
     if not dressing_ready then M.prepare_dressing(vr_stage) end
     if what ~= "scenery" and #simulator_levels == 0 then find_simulator_levels(vr_stage) end
-    local function keep(list, object)
+    local function keep(list, object, kept)
         local key = tostring(safe(function() return object:GetAddress() end) or object)
         if not hidden_seen[key] then
             hidden_seen[key] = true
-            list[#list + 1] = object
+            list[#list + 1] = kept or ref(object) -- put back later from a reference: see `fresh`
         end
     end
     for _, actor in ipairs(dressing_ready.collision) do
@@ -243,13 +402,13 @@ function M.set_dressing_hidden(vr_stage, hidden, sky_too, what)
     end
     if what == "scenery" then return count end
     for _, entry in ipairs(simulator_levels) do
-        local stream = entry.stream
+        local stream = fresh(entry.stream)
         -- Only a level the game has already shown: one told to hide while the game is still bringing it in
         -- holds up the start of the fight (seen in the game 2026-11-17).
-        if valid(stream) and (sky_too or entry.which ~= SIMULATOR_SKY)
+        if stream and (sky_too or entry.which ~= SIMULATOR_SKY)
             and safe(function() return stream:IsLevelVisible() end) == true
             and pcall(function() stream:SetShouldBeVisible(false) end) then
-            keep(hidden_streams, stream)
+            keep(hidden_streams, stream, entry.stream)
             count = count + 1
         end
     end
@@ -347,16 +506,23 @@ function M.stream_request(item)
 end
 
 -- What the helper said about an instance: "loaded", "unloaded", "refused" or nil (nothing yet). The last word wins.
+-- The file is read once and kept for a fifth of a second: a stage of 77 levels asks about each of them every tick,
+-- and reading the whole file for every one of them ran on the game thread.
+local acks, acks_read_at = {}, nil
 function M.stream_state(name)
-    local file = io.open(MOD_DIR .. "stages-ack.txt", "rb")
-    if not file then return nil end
-    local state
-    for line in file:lines() do
-        local who, what = line:match("^([%w_]+)\t(%a+)")
-        if who == name then state = what end
+    local now = os.clock()
+    if not acks_read_at or now - acks_read_at >= 0.2 then
+        acks, acks_read_at = {}, now
+        local file = io.open(MOD_DIR .. "stages-ack.txt", "rb")
+        if file then
+            for line in file:lines() do
+                local who, what = line:match("^([%w_]+)\t(%a+)")
+                if who then acks[who] = what end
+            end
+            file:close()
+        end
     end
-    file:close()
-    return state
+    return acks[name]
 end
 
 function M.stream_ready(name) return M.stream_state(name) == "loaded" end
@@ -381,7 +547,8 @@ local waiting_lights = {}
 function M.simulator_lighting_visible(vr_stage)
     find_simulator_levels(vr_stage)
     for _, entry in ipairs(simulator_levels) do
-        if valid(entry.stream) and safe(function() return entry.stream:IsLevelVisible() end) == true then return true end
+        local stream = fresh(entry.stream)
+        if stream and safe(function() return stream:IsLevelVisible() end) == true then return true end
     end
     return false
 end
@@ -435,6 +602,16 @@ function M.show_stage_lights()
     end
     waiting_lights = {}
     return shown
+end
+
+-- Drops every object this mod kept for a visit: the simulator's levels and look, the stage's shown actors and waiting
+-- lights. Called when a course is confirmed and when the visit ends, so nothing kept from one visit is ever touched in
+-- the next (where the game has destroyed it): see `fresh`.
+function M.forget_visit()
+    simulator_levels, simulator_searched_at = {}, nil
+    dressing_ready = nil
+    shown_actors, waiting_lights = {}, {}
+    hidden_actors, hidden_streams, hidden_components, collision_off, hidden_seen = {}, {}, {}, {}, {}
 end
 
 -- Shows again whatever `activate_stage` showed and the stage's own set-up has hidden since. No search: this runs a

@@ -1,11 +1,11 @@
 # FFVII Rebirth Simulator Stages
 
 A FINAL FANTASY VII REBIRTH PC mod that lets you fight Chadley's Combat Simulator courses on other stages. Pick a
-course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Two stages from the
-final battle are in this version: **Edge of Creation**, the rock platform among floating rocks in space, and **Inside
-the Lifestream**, the still, silver water under a starry sky.
+course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Six stages are in
+this version: **Edge of Creation** and **Inside the Lifestream** from the final battle, **Gilgamesh's Garden**, and
+three boss arenas from the story: **Mythril Mine**, **Cave of the Gi** and **Shinra Manor**.
 
-**Spoiler note:** both stages, their names and the pictures of them come from the game's final battle.
+**Spoiler note:** the stages, their names and the pictures of them come from the story, the final battle included.
 
 An AI coding agent built this mod: Claude (Anthropic), in Claude Code, did the research, wrote the code and tested it
 in the game through a test harness. The channel owner set the design and playtested it. [How we built it](docs/HOW-WE-BUILT-IT.md)
@@ -22,10 +22,21 @@ tells the story, dead ends included.
 - **Edge of Creation.** The rock platform, its floating rocks and the nebula sky from the final battle. The platform
   is stretched to cover the simulator's arena, a circle of about 24 m radius.
 - **Inside the Lifestream.** The water floor and the starry sky from the final battle.
-- **Which courses.** Every Combat Simulator course, including the Combat Training tutorials and the three courses our
-  [Training Dummy](https://github.com/CaitGPT/FFVII-Rebirth-Training-Dummy) mod adds. The eight Shinra Manor courses
-  are left as they are. A stage is only offered for courses whose enemies have room on it; both stages fit every course.
-- **Unlocking.** Both stages unlock when you have finished the game (once Chapter Select is open).
+- **Gilgamesh's Garden.** The garden where Gilgamesh holds his legendary trials.
+- **Mythril Mine.** The cavern where the Mythril Golem is fought.
+- **Cave of the Gi.** The chamber where Gi Nattak is fought, lit as in that fight.
+- **Shinra Manor.** The basement where the Galian Beast is fought, with its props and its floor door closed.
+- **Which courses.** Every Combat Simulator course, including the summon courses, the Combat Training tutorials and
+  the three courses our [Training Dummy](https://github.com/CaitGPT/FFVII-Rebirth-Training-Dummy) mod adds. The eight
+  Shinra Manor courses are left as they are. A stage is only offered for courses whose enemies have room on it: the
+  three story arenas are smaller than the simulator's arena, so the summon courses that need the most room (Phoenix,
+  Alexander and Odin) offer only the larger stages, and Shinra Manor fits only the smaller courses.
+- **Unlocking.** Edge of Creation and Inside the Lifestream unlock when you have finished the game (once Chapter
+  Select is open). Gilgamesh's Garden unlocks when Gilgamesh's quests are complete. Mythril Mine, Cave of the Gi and
+  Shinra Manor unlock as the story reaches them (from Chapters 4, 11 and 12).
+- **No invisible walls.** The simulator's own walls and pillars stop colliding on every stage, and on the three story
+  arenas its floor goes too, so you stand on the arena's own floor and stop at its own walls.
+- **No visible swap.** The stage loads behind a black screen, which lifts once it is in place.
 
 Nothing is written to your save. The mod changes no game files: it loads the stage's own levels beside the simulator
 while you fight, and removes them when you leave.
@@ -38,7 +49,7 @@ while you fight, and removes them when you leave.
 - The mod includes a small native helper (`dlls/main.dll`) built for that UE4SS. It loads the stage's levels, which
   UE4SS's Lua cannot do on this game. It checks the game code it relies on before acting and switches itself off if it
   does not recognise it: the game and the simulator run normally, but no picker appears.
-- A save that has finished the game.
+- A save that has unlocked at least one stage (see Unlocking above).
 
 ## Install
 
@@ -77,9 +88,10 @@ The other settings in the file are for development.
 ## Known issues
 
 <!-- Keep this list in step with the release notes; remove items as they are fixed. -->
-- **The simulator's stage can show for a moment.** On the first visit after starting the game, the new stage is in
-  place when the screen first shows a picture. On a later visit in the same session the simulator's own stage may show
-  for up to about a second before the swap. We have not captured that case.
+- **Crashes inside UE4SS.** The game can crash with an access violation in `UE4SS.dll` (at `+0x6a8c4f`) when a Lua mod
+  checks an object the game has already destroyed. We fixed every place this mod did that that we have found, and it
+  also happened before this mod existed, with other mods installed. If it happens to you, tell us which mods you had.
+- **Loading time.** A large stage takes a few seconds longer to load than the plain simulator, behind the black screen.
 - **"Get Ready" screen that never ends.** We found and fixed one cause in the mod. The game can also stop on a black
   "Get Ready" or loading screen in its own simulator fights, without any mod. Restart the game.
 - **The edge of Edge of Creation.** The platform is not round. It reaches 0.2 to 6 m past the simulator's invisible
@@ -90,10 +102,11 @@ The other settings in the file are for development.
 
 ## What is next
 
-The design includes each region's boss arena, unlocked by beating that region's boss, and the arenas of story bosses
-such as the Mythril Golem, Gi Nattak, Reno and Rude, and Gilgamesh. They are in `data/stages.json` but do not work
-yet: their ground is open-world terrain, which does not show when its level is loaded elsewhere. [How it works](docs/HOW-IT-WORKS.md)
-says what we tried.
+The design includes each region's boss arena, unlocked by beating that region's boss, and the arenas of open-world
+bosses such as the Grasptropod, the Anuran Suppressor and Gilgamesh's island. They are in `data/stages.json` but do not
+work yet: their ground is open-world terrain, which does not show when its level is loaded elsewhere. We also tried
+the Temple of the Ancients arena (Reno and Rude) and left it out: parts of its floor and its Lifestream sky did not
+come with it. [How it works](docs/HOW-IT-WORKS.md) says what we tried.
 
 ## Build from source
 

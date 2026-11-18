@@ -3,6 +3,252 @@
 Newest first. Each line is something observed, with where the evidence is. Screenshots and logs are outside Git, in
 `D:\FF7RebirthModding\Mods\SimulatorStages\evidence\`.
 
+## 2026-11-18, night: soak before release
+
+**43 stage loads and 41 exits after the 17:31 fix, no crash during a visit** (17:45 to 21:38, all six stages: Inside
+the Lifestream 9, Cave of the Gi 8, Shinra Manor 8, Gilgamesh's Garden 7, Mythril Mine 6, Edge of Creation 5; all six
+summon courses and Grasslands, Corel and Gongaga battle courses, with the combat autopilot). The last run was 20
+successful visits in a row (`evidence/soak-log.txt`, per-visit driver logs in `evidence/soak-visits/`). Earlier the
+same day, before the fix: about 9 crash reports over 64 stage loads, not all of them during a visit. The owner chose a visit count over a fixed time
+(crashes come on entering and leaving stages).
+
+**One crash, not in a visit:** 20:10:06, `UE4SS.dll+0xbf476c` (a null read inside UE4SS's Lua interpreter), a minute
+after a save load while the harness walked to Chadley; no stage had been loaded in that game, and this mod was only
+reading its helper's file. The same signature appeared once earlier in the day. Not attributed.
+
+**Frame freezes in fights (owner: "like clockwork, about every 4 seconds").** In the recording, clusters of 0.2 to 1 s
+freezes every ~3.2 s (`freezedetect` on the OBS file) while a course sat between rounds with no autopilot. The only
+activity was the test driver reading `read_combat_simulator_menu` every ~2 s: with no menu open, the harness's reader
+searches every widget (a `read_message_window` in a fight took 1.4 s). The driver now reads the menu only while one is
+open or, out of a fight, every third pass; the next fight's recording had no such rhythm. Earlier severe hitching
+(18:01 to 18:46) was video encoding running beside the game. Also: `pkill` does not exist in this shell, so earlier
+"stopped" drivers kept running and held the harness's input lock; the harness server was restarted at 20:07.
+
+## 2026-11-18, evening: summon courses with the combat autopilot; one more crash and its fix
+
+**Summon courses on the stages, fought by the harness's combat autopilot** (the owner asked for summon courses and the
+autopilot). Each run: course, picker, the weakest power level, a three-member party, about 100 s of autopilot:
+- Odin on Inside the Lifestream (solo Cloud: lost after 70 s; black screen off 5.6 s after arrival);
+- Phoenix on Edge of Creation (`upd-04.png`: floating rocks, nebula, party fighting; 3.6 s);
+- Bahamut Arisen on the Mythril Mine (`upd-05.png`; 6.4 s);
+- Titan on the Cave of the Gi (`upd-06.png`: lit on every side; 6.6 s);
+- Kujata on Gilgamesh's Garden (`upd-07.png`; 8.5 s).
+Phoenix, Alexander and Odin need 22 to 28 m, so they offer Inside the Lifestream, Edge of Creation and Gilgamesh's
+Garden; Titan, Kujata and Bahamut Arisen (14 m) also offer the Mythril Mine and the Cave of the Gi. Summon courses ask
+for a power level after the picker. The harness reads only the picker's first two rows, so the driver counts rows.
+
+**Mythril Mine lit (owner, with a screenshot of the fight: "the subjects are lit whereas in our mod they're almost
+silhouette").** The mine was the one interior loaded without its area's light level or a sky. Its streaming volumes
+(`1230-MYTHM.umap`, read from the Steam copy) load `1230-MYTHM_Light` with every part's `_Light` and `_TimeSet_Day`
+level; adding it, `04Mine_TimeSet_Day`, `09JUNOACave_TimeSet_Day` and the mountain cave sky (`MountSky_Cave`, as for
+the Cave of the Gi) lit the cave blue-green on every side, the crystals glowing and the party lit (`upd-09.png`,
+Titan's course; 45 lights shown against 17 before, none of the 29 levels refused). Still a little darker than the
+owner's screenshot. The owner had thought of cutting the stage, then kept it (2026-11-18).
+
+**A crash a second into an arrival (17:31:13).** Shinra Manor on a Grasslands course: `black screen on` at 17:31:12,
+then the same `UE4SS.dll+0x6a8c4f` fault, its stack a Lua `pcall` round `IsValid`, the shape of this mod's `valid()`.
+Objects were no longer kept from one visit to the next, but within a visit the mod still kept the simulator's level
+streams from the moment it found them and asked each tick whether they were valid, while the game was still loading
+and can replace them. Fixed: those streams are kept as references and found again by path on every use.
+
+**Finding an object again by its path only works for level streams** (tried in the game). StaticFindObject finds
+`/Game/Level/Game/EndGame.EndGame:LevelStreamingDynamic_1`, but not an actor in a level, the level itself
+(`...:PersistentLevel`), a world-plan volume or a widget, in any spelling tried (as GetFullName gives it, all dots,
+KismetSystemLibrary's path name). So the earlier fix's look-up of kept actors after a visit never found them: putting
+the simulator's look back after a visit has done nothing since then, which is harmless because the game builds the
+simulator's levels anew on every visit. Turning the picker window and the simulator volume into references broke the
+picker and the volume read (`picker closed without a choice`, `simulator volume unreadable`), so those, and the
+actors, are kept as objects again, found only once the loader is idle and used only within the visit.
+- UE4SS's `FindObject` with a nil outer raises "No overload found" past `pcall` and stops the chunk; so did
+  `TArray:ForEach` meeting a null actor slot. Avoid both in probes.
+
+## 2026-11-17: work towards 1.1.0 (more stages; Epic 1.005, slot 25)
+
+**Gilgamesh's Garden works.** The game ships a second look for the simulator's own level,
+`0000-COMON_VR_Gilgamesh_Terrain_Strip`, `_Light` and `_Effect`, used by Gilgamesh's legendary-summon trials. It is
+centred on the simulator's own origin, so it needs no offset, height or fit. Loaded and set up by hand, then through
+the mod's picker (`stream gilgamesh_garden 3 levels`, `activate 141`): the raked-sand garden with stepping stones,
+lanterns and cliffs, lit, the party on the sand (`131-gil-shown.png`, `136-gil-through-mod.png`).
+- Its 69 visible meshes, 62 point lights, 8 effects and its massive-environment backdrop arrive hidden.
+- It needs the simulator's own sky: with the sky hidden the scene is black. The trials appear to use it too.
+- Its own floor collision is in separate `AutoGenCollision` grid levels, not loaded; the simulator's flat floor is at
+  the same height. Beyond about 25 m a raised border sits 50 cm up. The playable radius stays 24.4 m.
+- Unlock: `stfArea0001_Gilga_StoryHub_Clear` (Gilgamesh's quests complete). Only checked on a finished save, where it
+  and every other Gilgamesh flag read true.
+
+**Interiors load and light, but do not fit the simulator.** The Galian Beast's arena (Shinra Manor basement, 8
+levels) streamed at its territory's centre: 1,923 meshes, 37 point lights and 69 spot lights shown, a lit stone floor
+at about the party's feet (`134-galian.png`). But the room is not a flat 24 m circle: walls stand inside it (a rim view
+is all wall) and sunken pits lie within it, over which the party walks in mid-air on the simulator's invisible floor
+(`135-galian-rim-*.png`). Its own collision is not loaded. An interior needs a chosen centre where the space is open
+and flat, and possibly its own wall collision; each is a design job.
+
+**What comes with an interior (owner, 2026-11-17: "figure out what else is supposed to come along with the level").**
+Like the Lifestream's sky and the Edge of Creation's rocks, each interior has parts beyond its terrain:
+- its `Gimmick` and `Physics` levels (props, doors, breakable boxes);
+- its floor and wall collision, in `AutoGenCollision/*_Terrain_Grid_<cell>` and `GridPhys_<cell>` levels, chosen by
+  cell with `tools/select_collision.py` (the Shinra Manor basement: 7 + 4);
+- and no sky: an indoor stage marks `indoors`, so the simulator's sky goes with its look. With the simulator's sky
+  and light still showing, the Mythril Mine is washed out pale cyan and its rock looks like ice (`147-mythril.png`);
+  with them hidden it is dark rock, timber and lanterns, as in the story fight (`150-mythril-novr.png`).
+
+**The Shinra Manor basement works** (23 levels, ready 4 s after arrival): the stone floor with its sunken channel and
+grate, lanterns and floodlit platform, the party standing on its own collision (`157`/`158-galian-*.png`). The room's
+breakable Shinra boxes are there. The owner saw a big square pit in the middle that the boss fight does not have: it
+is closed by a floor door, `BG0307_00_FloorDoor_Standard` in the Gimmick level, which arrives hidden. Shown, it fills
+the pit flush, with the square outline seen in the fight (`179`/`180-galian-door-*.png`, through the mod `181`).
+
+**The Mythril Mine works** (25 levels, ready 4 s after arrival): matches the owner's screenshot of the Mythril Golem
+fight (`151-mythril-mod.png`, `154-state.png`). Its collision grid levels and its Water level are not in the Epic 1.005
+build (the helper's load is refused at every path), but its terrain collides on its own: a flat floor about 30 m
+across, walled in. Cloud ranged about 30 m around it during a fight, on the ground throughout.
+
+**Gi Nattak's cave works** (56 levels, ready 7 s after arrival): the orange-lit rubble floor, paving and dark walls,
+as in the owner's two screenshots of the fight (`166`/`167-ginattak-mod.png`). Without its collision grid levels it
+has no ground of its own (`f11` read nothing within 5 m), so all 28 of its `AutoGenCollision` cells are loaded (the
+SeaArea's two left out). The level reader handles the Steam-era grid extractions but not these Epic 1.005 ones
+(`list index out of range` on every export), so cells cannot be picked one by one yet. With them it is a bowl, flat to
+within about 0.4 m for 18 m from the centre and about 15 cm below the simulator's floor (the anchor is lowered to
+match), rising about 1 m beyond. The red glow at the far edge in the owner's screenshots is not seen here; it may be
+the boss's own effect.
+
+**Names (owner, 2026-11-17): the location only.** "Shinra Manor", "Mythril Mine", "Cave of the Gi", "Temple of the
+Ancients" and so on, without the boss's arena.
+
+**Reno and Rude's arena works** (67 levels, ready 12 s after arrival): the plaza on the temple's second floor, dark
+stone paving round a recessed square, pillars, under a teal storm sky, as in the owner's two screenshots of the fight
+(`175-renorude-mod.png`). What it took:
+- The right rooms. Its old list loaded rooms from every floor (56 levels, 1.1 GB) and drew nothing near the arena.
+  Counting each loaded level's actors near the centre placed the arena in the second floor's LifeRoom A and B
+  (`030`-`032`); the first-floor maze, rest, doll, painting and black rooms were dropped.
+- Its floor. The second floor's `030_2th_LifeRoom_Terrain` level and its Gimmick, Physics and collision cells. The
+  plaza is 4.31 m below the territory marker, so the anchor is lowered by that much. It is flat at the simulator's
+  height for about 40 m and drops away about 20 m to the south, so the radius is 18 m.
+- Its light. The temple has no lights of its own: its sun and fog come from a world sky. With none it is black
+  (`168-renorude.png`); the Island "DayMaze" sky lit it as a sunny day (`170`); the owner's screenshots show the fight
+  under the "DayStorm" sky with the temple's `TimeSet_Storm` (`174`, `175`).
+- More levels than the helper queues. The helper holds at most 64 unanswered requests and refuses the rest
+  (`queue_full`); the first full try lost its last three levels, the sky among them. The mod now asks for 48 at a
+  time and tops up as the helper answers.
+
+The longer load shows: the simulator's own look stays for the 12 s it takes, as designed (it is hidden only once the
+stage is in).
+
+**Temple of the Ancients cut from 1.1.0 (owner, 2026-11-18): "more trouble than it's worth".** The floor's collision ran
+2-3 m past the paving at the edges to Cloud's front (west) and left (south). The fight's extension floors sit there
+(`BG3021_00_RenoFloor`, `BG3022_00_RenoFloorB`, LifeRoomA Gimmick), but they are skeletal meshes that the cutscene
+before the fight (`EV_FOREE_2480`, its `BG3021_00` motions) moves into place; shown, they stay in their starting pose
+and the owner still saw no floor. The sky's Lifestream ribbons are `FX_3110-TEMPL_2nd_LifeStreamStorm_01/02`, spawned
+by state changes (`scg3110_2ndCloud2_VFX_Tornado_On` and others, from the PlannerLevelSet data), not placed in any
+level. Both need assets loaded from disk; UE4SS's `LoadAsset` only finds what is already loaded in Epic 1.005, and
+`LoadAsset_Blocking` cannot be called from Lua (its soft-object parameter is unsupported). A native "load asset" in the
+helper would open both. Removed from the stage data (owner, 2026-11-18).
+
+**Crashes: a kept object checked after the game destroyed it (2026-11-18).** Twelve crash reports since 2026-11-14,
+ten inside UE4SS. Nine of those at `UE4SS.dll+0x6a8c4f`: disassembled, a function that reads a UObject's
+InternalIndex (UE4SS's validity check), crashing on memory the game had freed. A Lua mod kept an object, the game
+destroyed it, and the mod asked whether it was still valid. This mod did that: it kept the simulator's own levels
+(`simulator_levels`) from one visit to the next and checked them again, and put the simulator's hidden parts back from
+kept pointers after leaving. Two of today's crashes came exactly at that check (just after `scenery`). Fixed: kept
+objects are stored as path and address and found again with StaticFindObject (`fresh`), and `forget_visit` drops
+everything kept for a visit when a course is confirmed and when the visit ends. The same crash on 2026-11-14,
+before this mod existed, means other mods do it too: the harness's telemetry exporter, Junon Colosseum, the Queen's
+Blood probe, No Popups, Training Dummy, Battle Meters and the Biome Randomizer all keep objects across frames.
+
+**Menu lag.** With a stage just left, the Biome Randomizer's step logged game-thread stalls of 1.0 to 1.8 s (once
+3 s) several times a minute in the simulator menu. Unloading after a visit now runs at the game's own budgets with
+the engine's purge spread out (`background unload on/off`). Timed through the harness, a menu press moved the
+highlight in 0.83 s median with the Biome Randomizer and 0.71 s without: within the harness's own reading time, so
+not conclusive. The owner's report decides.
+
+**Arrival without the flicker (2026-11-18).** Recorded once a second from confirming the course, the Temple showed
+the simulator at 14 s, a darkened simulator while its look went, then the Temple at about 27 s (`280-entry-sheet.png`).
+The game ends its loading screen once its own levels are in, whatever ours are doing.
+- Holding the loading screen by keeping one of the simulator's levels hidden (the old "Get Ready hang", on purpose)
+  kept it up, but the game showed its round banner and the simulator anyway, and with it held one of the Shinra
+  Manor's levels did not load until it was let go, 41 s in. Dropped.
+- A camera fade and slowing the world's clock did nothing (the game drives both).
+- What works: the game's own fade overlay, `UEndMenuAPI.AddFadeFilter`, black and opaque, put up on arrival and faded
+  out over 0.5 s once the stage is in, set up and lit (`black screen on/off` in the log; lifted after 41 s whatever
+  happens). Temple: black until 17 s, then the finished stage (`293-entry-sheet.png`); Lifestream: black, then the
+  stage at about 12 s, as before (`288-entry-sheet.png`). Other mods' overlays drawn on top of everything, such as
+  Training Dummy's panel, still show over the black. On the largest stages the fight's first seconds run under it.
+
+**Skies light the interiors.** An indoor room is still lit by its region's sky (its sun, fog and reflection capture):
+- Shinra Manor: with Nibelheim's night sky (`MountSky_Night`) its rock walls, graffiti, cage bars and the floodlit door
+  show as in the owner's screenshot (`290-manor-night-*.png`, through the mod `292-manor-*.png`).
+- Cave of the Gi: with the mountain cave sky (`MountSky_Cave`) every side is lit, arches and braziers in a warm haze
+  (`294-cave-*.png`); Cosmo Canyon's sunset sky blew it out white.
+- Temple: the Lifestream effects are in its levels; the game switches the far ones off by distance (on by hand, they go
+  straight back off), so the broad ribbons of the boss fight are still missing. `start_effects` was removed.
+- The game crashed four more times today with UE4SS faults (`UE4SS.dll+0x6a8c4f`, once `+0xbf476c`). The same crash
+  happened six times on 2026-11-14, before this mod existed; two of today's came at the moment the mod hides the
+  simulator's look on a large stage, so the mod's heavy moments may make it likelier.
+
+**Owner's second round (2026-11-18): dark sides, invisible walls, load times, the Temple's sky.**
+- **Invisible walls and floor.** Hiding the simulator's look left its collision: its pillars and walls about 24 m out
+  were invisible walls inside the bigger stages, and its flat floor ran on past the Temple's edges. `drop_simulator_collision`
+  turns the pillars and walls off on every streamed stage and, with `own_ground`, the floor too (the four interiors).
+  The game keeps fighters inside the battle area itself: Cloud put 21 m out past the Temple's west edge was back on the
+  plaza within 1.5 s. Mapped with the floor off, the Temple's plaza ends at its own edges (`f11`).
+- **Which levels belong to an arena.** Each location's main level (`2550-GIZOK.umap`, `2650-NIBLS.umap`,
+  `3110-TEMPL.umap`) holds streaming volumes listing what the game loads where; read from the Steam copy's paks (the Epic
+  ones do not parse with our reader) with `volumes.py`. That added the Cave's SeaArea set and `SetArea_TimeSet_Day`,
+  the Manor's `LostN_Emissive` and `Entrance_Terrain`, and the Temple's rooms' grass, tree and interior levels (the far
+  ruins and towers). Eleven Cave levels that hold nothing in Epic 1.005 were dropped.
+- **Cave of the Gi**: three sides now lit as in the owner's screenshot (`270-cave-*.png`); one side is still black.
+- **Temple**: the Lifestream effects in its levels are mostly started by the story as the party walks in, so the
+  stage starts them (`start_effects`); a faint green ribbon now shows in the sky (`276-temple-3.png`), not the broad
+  ribbons of the owner's screenshot. Other skies tried (DayStormAerith1st, DayMaze, the Cetra time set) did not add them.
+- **Shinra Manor's sides are still too dark**: the lamps glow but light little round them. Not the missing levels
+  (all its light levels load), not its `Timeset_None`, and not the `Before_*` set (that is the flashback manor's). A
+  guess: its walls' baked lighting does not come through when the levels are loaded away from their own place.
+- **Load times.** The engine's level-streaming budgets (`s.UnregisterComponentsTimeLimit` 1 ms, 5 components a step;
+  adding 5 ms, 10 a step) made leaving the Cave of the Gi take 79 s back to the course list, against 43 s from the
+  plain simulator. The mod now raises them to 20 ms and 100 while a stage loads or unloads and puts the game's values
+  back after (`fast streaming on/off` in the log; checked back at 1.0 after a visit). Sending the unloads only once the
+  game's own loader has been idle 4 s after a visit, rather than as its trip back starts, took the Temple from 59 s to
+  48 s; the garden takes 45 s. Arriving: the Cave's levels are in 8 s after arrival instead of 11. The helper's answer
+  file is now read once a fifth of a second instead of once per level.
+- The game crashed twice more today with the same UE4SS fault (`UE4SS.dll+0x6a8c4f`), once in a plain-simulator fight
+  with no stage loaded: it is not this mod's loading.
+
+**Checked with the game's photo mode (2026-11-18).** The owner asked for photo-mode pictures of every stage instead of
+screenshots taken by moving the party (the earlier captures teleported Cloud, which the owner saw as him snapping
+around). The harness now has `photo_mode_photos`; the `230-<stage>-<n>.png` series is four views per stage with the
+party hidden.
+- **Unloads hit the helper's 64-request queue too.** Leaving the Temple released its 67 levels at once; the last three,
+  its sky among them, were refused and stayed loaded. The sky's fog, sun and unbound post-process then applied to the
+  whole world: Edge of Creation and the Mythril Mine came out white, the Lifestream and the garden tinted. Releases are
+  now queued and sent 48 at a time, after the visit too; checked in the game: all 67 unloaded (the 67th after 12.6 s)
+  and the next stage was right.
+- **Two game crashes**, at 00:16 and 01:00, both an access violation at `UE4SS.dll+0x6a8c4f` with the game's own C++
+  exception on the stack: the same signature as the UE4SS crash in FFVII-Modding issue #220. Both came while a large
+  stage (the Temple, then the Cave) was loading. Not caused by this mod's code as far as the dumps show, but large
+  stages seem to make it likelier.
+- Still to look at: the Shinra Manor is darker than the owner's screenshot of the fight; Gilgamesh's Garden shows the
+  simulator's hexagon sky (kept on purpose: without it the garden is black).
+
+**The stage's lights now always wait for the simulator's look to be hidden.** On a later visit a cached stage was
+ready "0 s after arrival", before the game had shown the simulator's lighting, so the mod saw none and switched the
+stage's lights on at once; the simulator's lighting could then arrive over them (the dull Lifestream the owner saw
+once). Both a first and a cached second Lifestream visit now log `lights wait` then `lights` after the dressing, and
+look the same (`160`/`161-lifestream-*.png`).
+
+**Fixed before release:** a path "normalisation" in the working copy had doubled `/Game/Level/Game/` in every level
+path. The installed 1.0.0 paths were right; the working copy was corrected before anything shipped.
+
+**Feasibility, as it stands:**
+
+| Stage | State |
+| --- | --- |
+| Gilgamesh's Garden | Works |
+| Other final-battle sets (church, broken rock, Jenova phases) | Not tried; built like the two that work, expected easy. Not on the owner's list |
+| Shinra Manor basement (Galian Beast), Mythril Mine (Mythril Golem) | Work |
+| Cave of the Gi (Gi Nattak) | Works |
+| Temple of the Ancients (Reno and Rude) | Loaded, but cut in 1.1.0 (floor collision and Lifestream sky missing; see 2026-11-18) |
+| Open world: the six regional arenas, Grasptropod, Anuran Suppressor, Gilgamesh's island arena | Blocked: their ground is massive-environment terrain, which does not draw when loaded elsewhere |
+
 ## 2026-11-17: seventh live session (which courses; the swap at the start of a fight; Epic 1.005, slot 25)
 
 The owner: the tutorial and Training Dummy courses should have the stages too (the Shinra Manor courses stay left

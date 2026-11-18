@@ -50,6 +50,13 @@ local function fake(options)
         return 7
     end
     function g.scenery_present() note("floor?"); return options.floor ~= false end
+    g.blacks = {}
+    function g.black_screen(on) g.blacks[#g.blacks + 1] = on; return true end
+    g.background = {}
+    function g.background_unload(on) g.background[#g.background + 1] = on; return true end
+    g.fast = {}
+    function g.fast_streaming(on) g.fast[#g.fast + 1] = on; return true end
+    function g.drop_simulator_collision(with_floor) note(with_floor and "walls+floor off" or "walls off"); return 9 end
     function g.switch_sky(sky) note("sky:" .. sky.volume); return true end
     function g.stream_request(item)
         if options.refuse_level and item.package:find(options.refuse_level, 1, true) then return false end
@@ -57,7 +64,12 @@ local function fake(options)
         return true
     end
     function g.stream_ready(name) return g.loaded[name] == true or g.loaded.all == true end
-    function g.stream_release(name) g.released[#g.released + 1] = name; return true end
+    g.unloaded = {}
+    function g.stream_state(name)
+        if g.unloaded[name] then return "unloaded" end
+        if g.stream_ready(name) then return "loaded" end
+    end
+    function g.stream_release(name) g.released[#g.released + 1] = name; g.unloaded[name] = true; return true end
     function g.activate_stage(stage, lights_now)
         note("activate:" .. stage.id)
         if lights_now == false then note("lights held"); return 3, 5 end
@@ -93,11 +105,12 @@ local function has(log, text)
 end
 
 -- ===== Streamed (the default): select a course, pick a stage, confirm, arrive, leave =====
+-- (Gi Nattak's cave is indoors, so the simulator's sky goes with its look: "hide+sky".)
 local game, saved, logged = fake(), {}, {}
 local session = new(game, {}, saved, logged)
 local course, options, start = session.course_selected(MU, defaults)
 eq(course.key, "COL30_GRASA_03_Free_vr", "course recognised")
-eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh",
+eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh,gilgamesh_garden",
     "every unlocked stage with 18 m of room, from either continent")
 eq(start, 1, "picker starts on the simulator")
 session.choose(course, "gi_nattak")
@@ -105,29 +118,33 @@ eq(saved[1], "COL30_GRASA_03_Free_vr = gi_nattak\n", "choice saved")
 local stage = session.course_confirmed(100, defaults)
 eq(stage.id, "gi_nattak", "chosen stage used")
 local gi = stages.find(catalogue, "gi_nattak")
-eq(#game.requested, #gi.levels, "every level requested")
+local gi_items = #gi.levels + (gi.sky_level and 1 or 0)
+eq(#game.requested, session_module.REQUEST_BATCH, "the first batch requested (the cave has more levels than one batch)")
+assert(gi_items > session_module.REQUEST_BATCH, "a stage larger than one batch")
 eq(game.count("set_target"), 0, "the simulator itself is not moved")
 -- the arena's anchor lands on the simulator's centre
 local first = game.requested[1]
 assert(math.abs(first.location.X + gi.anchor[1] - -200000) < 0.01, "x offset")
 assert(math.abs(first.location.Z + gi.anchor[3] - 10000) < 0.01, "z offset")
 session.tick(101)
-eq(game.count("hide"), 0, "nothing dressed before the simulator starts")
+eq(game.count("hide+sky"), 0, "nothing dressed before the simulator starts")
 game.inside = true
 session.tick(105)
-eq(game.count("hide"), 1, "simulator's look hidden on arrival"); eq(game.count("unhide"), 0, "no far-terrain call when streaming")
+eq(game.count("hide+sky"), 0, "simulator's look kept while the stage's levels load"); eq(game.count("unhide"), 0, "no far-terrain call when streaming")
 eq(session.stream_ready(), false, "levels still loading")
 game.loaded.all = true
 session.tick(106)
+eq(#game.requested, gi_items, "the rest requested as the helper answers")
+eq(game.count("hide+sky"), 1, "simulator's look hidden once they are in")
 eq(session.stream_ready(), true, "levels loaded"); assert(has(logged, "stream\tready"), "readiness logged")
-session.tick(108)
-eq(game.count("hide"), 2, "dressed once more after the stage's own set-up")
+session.tick(109)
+eq(game.count("hide+sky"), 2, "dressed once more after the stage's own set-up")
 -- Mid-visit: no picker, no new requests
 local _, mid_options = session.course_selected(MU, defaults)
 eq(#mid_options, 0, "no picker mid-visit")
 local again, why = session.course_confirmed(121, defaults)
 eq(again, nil, "no new stage mid-visit"); eq(why, "visit in progress", "mid-visit reason")
-eq(#game.requested, #gi.levels, "nothing more requested")
+eq(#game.requested, gi_items, "nothing more requested")
 -- A gap between rounds shorter than the grace does not end the visit
 game.inside = false
 session.tick(130); session.tick(131)
@@ -137,7 +154,22 @@ session.tick(132)
 game.inside = false
 session.tick(140); session.tick(143)
 eq(session.busy(), false, "visit over")
-eq(#game.released, #gi.levels, "every level released"); eq(game.count("show"), 1, "simulator's look back")
+-- The unloads wait for the game's own trip back (its loader idle a while), then go 48 at a time too (the helper
+-- queues 64 requests, unloads included): the rest on the next tick
+eq(#game.released, 0, "nothing unloaded while the game goes back")
+eq(session.unloading(), true, "unloading to do")
+session.tick(144)
+eq(#game.released, session_module.REQUEST_BATCH, "the first batch once the loader is idle")
+session.tick(145)
+eq(#game.released, gi_items, "every level released")
+eq(game.fast[#game.fast], false, "the unloads run at the game's own streaming budgets")
+eq(game.background[1], true, "in the background, with the engine's purge spread out")
+session.tick(146)
+eq(session.unloading(), true, "the spread-out purge stays on a while")
+session.tick(146 + session_module.GC_SPREAD_SECONDS)
+eq(game.background[#game.background], false, "then the game's own setting is put back")
+eq(session.unloading(), false, "unloading done")
+eq(game.count("show+sky"), 1, "simulator's look back")
 eq(game.volumes[1].target.location.X, -200000, "volume never touched")
 
 -- Next visit: the picker starts on the remembered stage, and confirming without picking reuses it
@@ -150,19 +182,35 @@ eq(stage.id, "gi_nattak", "remembered stage reused")
 game = fake()
 session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
 course, options = session.course_selected(ODIN, defaults)
-eq(names(options), "vanilla,grasslands,lifestream,space_rock,grasptropod", "what is big enough for Odin")
+eq(names(options), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden", "what is big enough for Odin")
 stage = session.course_confirmed(0, defaults)
 local void = stages.find(catalogue, "lifestream")
 eq(#game.requested, #void.levels + 1, "levels plus the sky")
 eq(game.requested[#game.requested].package, void.sky_level, "sky requested")
 game.inside = true
+game.loaded.all = true
 session.tick(1)
 eq(game.count("hide+sky"), 1, "simulator's sky hidden with its look")
+eq(game.count("walls+floor off"), 0, "the Lifestream stands on the simulator's floor")
+eq(game.count("walls off"), 1, "but loses its invisible walls")
 game.inside = false
 session.tick(2); session.tick(6)
 eq(game.count("show+sky"), 1, "simulator's sky back")
 
 -- Levels that never load are reported once, and the visit carries on
+-- An indoor stage is lit by its region's sky, and the simulator's sky is hidden
+game = fake()
+session = new(game, { COL30_GRASA_01_Free_vr = "mythril_golem" })
+session.course_selected(PLAIN, defaults)
+stage = session.course_confirmed(0, defaults)
+eq(stage.id, "mythril_golem", "indoor stage chosen")
+eq(#game.requested, #stage.levels + 1, "its levels and its region's sky requested")
+game.inside = true
+game.loaded.all = true
+session.tick(1)
+eq(game.count("hide+sky"), 1, "simulator's sky hidden indoors")
+eq(game.count("walls+floor off"), 1, "a stage with its own floor and walls drops the simulator's floor too")
+
 game, logged = fake(), {}
 session = new(game, { COL30_GRASA_03_Free_vr = "nibel" }, nil, logged)
 session.course_selected(MU, defaults)
@@ -181,7 +229,7 @@ session = new(game, { COL30_GRASA_03_Free_vr = "gi_nattak" })
 session.course_selected(MU, defaults)
 stage, why = session.course_confirmed(0, defaults)
 eq(stage, nil, "refused"); eq(why, "level request refused", "refused reason"); eq(session.busy(), false, "idle after refusal")
-eq(#game.released, #gi.levels, "everything released")
+eq(#game.released, session_module.REQUEST_BATCH, "everything asked for released (the first batch)")
 
 -- Without the helper nothing is offered, and a remembered stage is not used
 game = fake({ helper = false })
@@ -195,7 +243,7 @@ eq(stage, nil, "no helper: simulator stage"); eq(why, "gi_nattak: needs the leve
 game = fake({ cleared = false, flags = { stfWorldReport_Finish_NIBLA_025 = true } })
 session = new(game, { COL30_GRASA_01_Free_vr = "gongaga" })
 course, options = session.course_selected(PLAIN, defaults)
-eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,reno_rude",
+eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast",
     "the unlocked arena and the story bosses beaten by this point")
 stage, why = session.course_confirmed(0, defaults)
 eq(stage, nil, "locked choice not used"); eq(why, "gongaga: locked", "locked reason")
@@ -213,6 +261,43 @@ stage, why = session.course_confirmed(0, defaults)
 eq(stage, nil, "unrecognised course left alone"); eq(why, "course not recognised", "unrecognised reason")
 eq(#game.requested, 0, "nothing requested")
 
+-- A new visit confirmed while the last one's unloads still wait for an idle loader sends them first
+game = fake({ settled = false })
+session = new(game, { COL30_GRASA_03_Free_vr = "nibel" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+session.tick(91) -- the simulator never started: the visit ends, its unloads wait (the loader is never idle here)
+session.tick(95)
+eq(#game.released, 0, "held while the loader is busy")
+session.course_selected(MU, defaults)
+session.course_confirmed(100, defaults)
+eq(#game.released, #stages.find(catalogue, "nibel").levels, "sent before the next visit's levels")
+
+-- A streamed stage arrives behind a black screen, lifted once the stage is set up and the simulator's look is gone
+game = fake()
+session = new(game, { COL30_GRASA_03_Free_vr = "gi_nattak" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+session.tick(1)
+eq(game.blacks[1], true, "black from arrival")
+game.loaded.all = true
+session.tick(2)
+eq(#game.blacks, 1, "still black just after the swap")
+session.tick(2 + session_module.BLACK_AFTER)
+eq(game.blacks[#game.blacks], false, "lifted once set up")
+eq(#game.blacks, 2, "lifted once")
+-- and lifted after the time limit if the stage never comes
+game = fake()
+session = new(game, { COL30_GRASA_03_Free_vr = "gi_nattak" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+session.tick(1); session.tick(30)
+eq(#game.blacks, 1, "black while waiting")
+session.tick(1 + session_module.HOLD_PATIENCE + session_module.BLACK_AFTER)
+eq(game.blacks[#game.blacks], false, "never left in the dark")
+
 -- The simulator never starts: release after the timeout
 game = fake()
 session = new(game, { COL30_GRASA_03_Free_vr = "nibel" })
@@ -222,7 +307,8 @@ session.tick(60)
 eq(session.busy(), true, "still waiting")
 session.tick(91)
 eq(session.busy(), false, "gave up")
-eq(#game.released, #stages.find(catalogue, "nibel").levels, "released after timeout")
+session.tick(92)
+eq(#game.released, #stages.find(catalogue, "nibel").levels, "released after timeout, once the loader is idle")
 eq(game.count("hide"), 0, "never dressed")
 
 -- No volume, an unsupported world, or two candidate volumes: no picker and the simulator left alone
@@ -431,12 +517,14 @@ session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
 session.course_selected(ODIN, defaults)
 session.course_confirmed(0, defaults)
 game.inside = true
+game.loaded.all = true
 game.shown = false
 session.tick(1); session.tick(1); session.tick(2)
 eq(game.count("floor?"), 2, "asked once a second")
 eq(game.count("prepare"), 0, "no full look-up before the floor exists")
 
--- The stage's lights go on at once when none of the simulator's lighting levels is showing
+-- The stage's lights are held even when none of the simulator's lighting levels is showing yet: a cached stage is
+-- ready before the game shows them, and they would arrive over the stage's lights (the Lifestream, 2026-11-17)
 game = fake()
 session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
 session.course_selected(ODIN, defaults)
@@ -445,8 +533,11 @@ game.inside = true
 game.loaded.all = true
 game.shown = false
 session.tick(1)
-eq(game.count("lights held"), 0, "not held when the simulator's lighting is not showing")
-eq(game.count("lights"), 0, "nothing left to switch on")
+eq(game.count("lights held"), 1, "held before the simulator's lighting has shown")
+eq(game.count("lights"), 0, "not on yet")
+game.shown = true
+session.tick(2)
+eq(game.count("lights"), 1, "on once the simulator's look is hidden")
 -- and wait for those levels to be hidden when one is
 game = fake({ sim_lit = true })
 session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
@@ -474,3 +565,18 @@ session.tick(1); session.tick(5); session.tick(12)
 eq(game.count("lights"), 0, "held for a while")
 session.tick(13)
 eq(game.count("lights"), 1, "then switched on anyway")
+
+-- The simulator's look stays until a streamed stage's levels are in
+game = fake()
+session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
+session.course_selected(ODIN, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+game.shown = true
+session.tick(1); session.tick(2); session.tick(3)
+eq(game.count("scenery"), 0, "scenery kept while the stage is loading")
+eq(game.count("hide+sky"), 0, "lighting kept while the stage is loading")
+game.loaded.all = true
+session.tick(4)
+eq(game.count("scenery"), 1, "scenery hidden once the stage is in")
+eq(game.count("hide+sky"), 1, "and the lighting")

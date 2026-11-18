@@ -165,11 +165,12 @@ end
 -- Register this mod's game-thread callback while mods load: a first ExecuteInGameThread during play can crash.
 pcall(ExecuteInGameThread, function() end)
 
--- Nothing runs on the game thread unless a visit is in progress, the picker is open or the key was pressed.
+-- Nothing runs on the game thread unless a visit is in progress or still unloading, the picker is open or the key
+-- was pressed.
 LoopAsync(TICK_MS, function()
     pcall(game.helper_poll, os.time()) -- file reading only: is the level helper alive?
     local eval = eval_waiting()
-    if session.busy() or picker or key_pressed or eval then
+    if session.busy() or session.unloading() or picker or key_pressed or eval then
         ExecuteInGameThread(function()
             local ok, err = pcall(function()
                 if eval then run_eval() end

@@ -111,9 +111,9 @@ eq(stages.blocked(grasslands, phoenix, context({ continent = "EASTC" }), move), 
 
 -- What the picker offers
 local options, left_out = stages.options(catalogue, ordinary, context(), defaults)
-eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,reno_rude,gilgamesh", "every stage for an ordinary course, anywhere")
+eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,gilgamesh,gilgamesh_garden", "every stage for an ordinary course, anywhere")
 eq(#left_out, 0, "nothing left out")
-eq(ids(stages.options(catalogue, odin, context(), defaults)), "vanilla,grasslands,lifestream,space_rock,grasptropod", "what is big enough for Odin")
+eq(ids(stages.options(catalogue, odin, context(), defaults)), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden", "what is big enough for Odin")
 eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress = 2000, flag = function(n) return n == "stfWorldReport_Finish_NIBLA_025" end }), defaults)),
     "vanilla,nibel", "only what is unlocked")
 eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress = 7000, flag = function() return false end }), defaults)),
@@ -200,7 +200,7 @@ eq(stages.continent_of("Something_Else", catalogue.vr_stage), nil, "unknown volu
 -- Experimental stages are not offered unless asked for
 local plain = stages.parse_settings("")
 eq(plain.experimental, false, "experimental is off by default")
-eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock", "only the working stages by default")
+eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock,mythril_golem,gi_nattak,galian_beast,gilgamesh_garden", "only the working stages by default")
 eq(stages.blocked(corel, ordinary, context(), plain), "not working yet", "an arena stage by default")
 eq(stages.blocked(void, ordinary, context(), plain), nil, "the white void by default")
 

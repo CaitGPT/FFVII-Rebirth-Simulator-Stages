@@ -34,20 +34,35 @@ What makes the simulator look like the simulator:
    native helper. Each level is loaded as a new instance named `SimStage_<stage>_<n>_<height>_<visit>`, placed so the
    stage's anchor lands on the simulator's centre.
 3. **Loading screen.** The party "arrives" when the game's in-simulator flag turns on, 5 to 9 s after the confirm. The
-   screen stays black for about another 4 s (first visit: about 17 s from the confirm; later visits about 13 s).
-   Behind it, once the package loader has been idle for a second:
+   game ends its own loading screen once its own levels are in, whatever ours are doing, so on arrival the mod puts up
+   a black screen of the game's own (`UEndMenuAPI.AddFadeFilter`, black and opaque) and fades it out over 0.5 s once
+   the stage is in, set up and lit (1 to 9 s after arrival; lifted after 40 s whatever happens). While a stage loads
+   or unloads, the engine's level-streaming budgets are raised (`s.UnregisterComponentsTimeLimit` and its kin, 20 ms
+   and 100 components a step) and put back after. Behind the black screen, once the package loader has been idle for
+   a second:
    - the stage is stretched if it has a `fit`, and its hidden meshes are shown;
-   - the simulator's floor, blocks, skyline and rim collision are found and hidden as soon as its floor exists;
+   - the simulator's floor, blocks, skyline and rim collision are found and hidden as soon as its floor exists; its
+     pillars and walls stop colliding (hidden, they would be invisible walls inside a larger stage), and on a stage
+     with its own ground (`own_ground`) so does its flat floor;
    - the stage's lights wait until none of the simulator's lighting levels is showing (see Lighting below).
 4. **The simulator's lighting.** Its lighting, effect and sky levels are told to hide on the first tick on which the
    game has loaded and shown all three. Telling one to hide while the game is still bringing it in can stop the start
    on the "Get Ready" screen.
-5. **Leaving.** When the in-simulator flag has been off for 3 s, the mod asks the helper to unload every instance and
-   shows the simulator's look again from the references it kept, without searching.
+5. **Leaving.** When the in-simulator flag has been off for 3 s, the mod drops everything it kept for the visit. Once
+   the package loader has been idle for 4 s it asks the helper to unload every instance, 48 at a time, at the game's
+   own streaming budgets, with the engine's purge of the unloaded levels spread over the next 70 s
+   (`s.ContinuouslyIncrementalGCWhileLevelsPendingPurge`). The simulator's own levels are made anew on every visit.
 
-Every `FindAllOf` costs about 0.2 s on this game, whatever the class, because it walks the whole object table. The
-mod makes all of its searches behind the loading screen and keeps references; from the swap on it only flips kept
-objects.
+Every `FindAllOf` costs about 0.2 s on this game, whatever the class, because it walks the whole object table, and a
+`StaticFindObject` by path about 25 ms. The mod makes all of its searches behind the black screen; from the swap on it
+only flips objects it found.
+
+**Kept objects and crashes.** Asking UE4SS whether a kept object is still valid reads the object's memory; if the game
+has already destroyed and freed it, the game crashes inside UE4SS (`UE4SS.dll+0x6a8c4f`). So nothing found on one visit
+is used on the next, and the simulator's level streams, which the game can replace while it loads, are kept as their
+path and address and found again by path each time (`ref` and `fresh` in `game.lua`). Only level streams can be found
+by path in this game: an actor in a level, the level itself, a widget or a world-plan volume cannot. Actors are
+therefore found once the loader is idle and used only within that visit.
 
 ## Lighting
 
@@ -71,8 +86,10 @@ while none of the simulator's lighting levels is visible, or after 12 s regardle
 
 | Field | Meaning |
 | --- | --- |
-| `levels` | Level packages to load, in order |
-| `sky_level` | Loaded last; when a stage brings a sky, the simulator's sky is hidden |
+| `levels` | Level packages to load, in order. They are asked for 48 at a time, more as the helper answers: the helper holds at most 64 unanswered requests |
+| `sky_level` | Loaded last; when a stage brings a sky, the simulator's sky is hidden. An indoor room is still lit by its region's sky (its sun, fog and reflection capture), so the story arenas load the sky their boss fight uses |
+| `indoors` | The simulator's sky (its light and post-process) is hidden even without a `sky_level`; otherwise it washes an interior out |
+| `own_ground` | The stage has its own floor and walls: the simulator's flat floor stops colliding too |
 | `anchor` | The point in the stage's own coordinates that lands on the simulator's centre: the arena's centre at the height of its ground |
 | `radius_m` | Clear radius the stage offers; a course is offered the stage if its enemies need no more |
 | `show_classes`, `keep_hidden` | See Lighting |
@@ -107,13 +124,40 @@ the sky `0001-WORLD_IslandSky_Galaxy`.
   real fight. Of the Galaxy sky's ten fog variants only the centre one is shown.
 - Its far-land level is not loaded: it is a flat water plane up to 40 cm above the floor.
 
+### Gilgamesh's Garden (`gilgamesh_garden`)
+
+The game ships a second look for the simulator's own level, used by Gilgamesh's legendary trials:
+`0000-COMON_VR_Gilgamesh_Terrain_Strip`, `_Light` and `_Effect`, centred on the simulator's own origin, so it needs no
+offset or fit. Its meshes, lights, effects and backdrop arrive hidden. It keeps the simulator's sky: without it the
+scene is black. Unlock: `stfArea0001_Gilga_StoryHub_Clear`.
+
+### The story arenas: Mythril Mine, Cave of the Gi, Shinra Manor
+
+Each loads the rooms round its boss's territory, centred on the territory and lowered to its floor:
+
+- its terrain, light and time-set levels, as the area's own streaming volumes list them (read from the area's main
+  level, such as `1230-MYTHM.umap`, with `tools/dump_level.py`);
+- its `Gimmick` and `Physics` levels (props, doors, breakable boxes; Shinra Manor's floor door is shown, closed as in
+  the fight);
+- its floor and wall collision in the `AutoGenCollision` grid levels where the terrain does not collide by itself
+  (the Cave of the Gi loads all 28 cells; the mine's terrain collides on its own);
+- a region sky: Nibelheim's night for the manor, the mountain cave for the cave and the mine. Without one, the sides
+  of the room were dark and, in the mine, the party was almost a silhouette.
+
+Clear radius: the mine 15 m, the cave 18 m, the manor 13 m, so the largest summon courses do not offer them. Unlock
+by chapter progress (Chapters 4, 11 and 12), an approximation of when the story reaches each.
+
 ### Planned stages that do not work yet
 
-The six regional boss arenas and seven story-boss arenas are in `data/stages.json` with `experimental: true`. Streamed
-to the simulator, their ground does not appear: it is the game's open-world (massive-environment) terrain, which did
-not draw at the new place when we tried Nibel. Their skies are regional skies with many local fog volumes. Moving the
+The six regional boss arenas and the open-world boss arenas (Grasptropod, Anuran Suppressor, Gilgamesh's island) are
+in `data/stages.json` with `experimental: true`. Streamed to the simulator, their ground does not appear: it is the
+game's open-world (massive-environment) terrain, which did not draw at the new place when we tried Nibel. Moving the
 simulator to the arena instead (`route = move`, writing the arena's position into `TargetLocation`) was ignored once
 the simulator had been visited; a first visit after starting the game is untested.
+
+The Temple of the Ancients arena (Reno and Rude) was built and then removed: parts of its floor are skeletal meshes
+that the cutscene before the fight moves into place, and its Lifestream ribbons are effects the story spawns, not
+placed in any level. Both would need assets loaded from disk, which UE4SS's Lua cannot do on this game.
 
 ## The native helper
 
@@ -147,7 +191,19 @@ each visit, with times), and the three helper files above. Nothing goes into the
 ## What was tested
 
 On FINAL FANTASY VII REBIRTH 1.005 (Epic Games Store), UE4SS 3.0.1 with our 1.005 fix, a save that has finished the
-game. Fights were driven by a test harness with the game's Classic mode, and by the owner by hand.
+game. Fights were driven by a test harness with the game's Classic mode or the harness's combat autopilot, and by the
+owner by hand.
+
+1.1.0:
+
+- Every stage on at least two different courses: all six summon courses, Grasslands and Corel battle courses, and the
+  Training Dummy DPS course; a three-round course kept its stage for every round.
+- Visits back to back across all six stages after the fix for objects kept within a visit: 43 stage loads and 41
+  exits on 2026-11-18 with no crash during a visit (one crash that evening came a minute after a save load, with no
+  stage loaded; see LIVE-RESULTS). Before the fix the game crashed about 9 times that day, over 64 stage loads (not all of those crashes during a visit).
+- The swap behind the black screen: one frame a second from the confirm.
+
+1.0.0:
 
 - Both stages through the picker, many times, on Grasslands courses and the Training Dummy DPS course, solo and with a
   party of three, with a summon (Odin) called on Edge of Creation; levels released on leaving every time.
