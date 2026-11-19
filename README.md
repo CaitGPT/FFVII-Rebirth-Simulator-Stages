@@ -33,7 +33,7 @@ tells the story, dead ends included.
   the three courses our [Training Dummy](https://github.com/CaitGPT/FFVII-Rebirth-Training-Dummy) mod adds. The eight
   Shinra Manor courses are left as they are. A stage is only offered for courses whose enemies have room on it: the
   three story arenas are smaller than the simulator's arena, so the summon courses that need the most room (Phoenix,
-  Alexander and Odin) offer only the larger stages (Midgar Outskirts among them), and Shinra Manor fits only the smaller courses.
+  Alexander and Odin) offer only the larger stages (Midgar Outskirts fits Alexander and Odin, not Phoenix), and Shinra Manor fits only the smaller courses.
 - **Unlocking.** Edge of Creation and Inside the Lifestream unlock when you have finished the game (once Chapter
   Select is open). Gilgamesh's Garden unlocks when Gilgamesh's quests are complete. Midgar Outskirts is offered from
   the start. Mythril Mine, Cave of the Gi and Shinra Manor unlock as the story reaches them (from Chapters 4, 11 and

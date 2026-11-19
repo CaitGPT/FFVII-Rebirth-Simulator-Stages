@@ -4,7 +4,7 @@
 
 - **Midgar Outskirts**: the rocky ground outside Sector 5's wall where Zack fights Shinra's soldiers in the prologue,
   with its fires, fences, the plate overhead and the reactor, under the prologue's sky. It stands on its own ground and
-  has room for every summon course. Offered from the start. The downed helicopters from that fight are not included:
+  has room for every summon course except Phoenix's. Offered from the start. The downed helicopters from that fight are not included:
   the story places them, and the mod cannot load their model.
 
 ## 1.1.0 (2026-11-18)

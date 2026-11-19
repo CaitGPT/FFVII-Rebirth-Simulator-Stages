@@ -155,7 +155,7 @@ centre at (-470, 68340, 60) with an escape wall 50 m across. It loads the `020_5
 outer wall's four `Terrain_Grid` collision cells with their `GridPhys` cells. With one cell, the ground ended about 6 m
 east of the centre; with all four, the capsule probe found ground within 60 cm of the centre's height across the arena.
 Its sky is `ZaxSky_Day`, which the prologue cutscenes name. The simulator's floor goes (`own_ground`). Clear radius 25 m,
-so every summon course offers it. Offered from the start.
+so every summon course but Phoenix's (28.3 m) offers it. Offered from the start.
 
 The three downed helicopters are not included. The story script places them (prop model
 `VE0015_00_FallenHeli_Standard`, at markers in `4000-MIDGR_LevelPlan_Resident`), and the model is not in memory in the

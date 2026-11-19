@@ -10,9 +10,12 @@ Newest first. Each line is something observed, with where the evidence is. Scree
   ground ended about 6 m east of the centre; with the outer wall's four cells and their physics cells, the capsule probe
   found ground within 60 cm of the centre's height across the arena. The downed helicopters are not there: the story
   places them (`VE0015_00_FallenHeli_Standard`), and `LoadAsset` returns an invalid object for their model.
-- **Courses:** Titan solo, Alexander with the party and two Grasslands courses, 90 s of combat autopilot each; then
-  visit 1 of a soak (Grasslands, solo). The stage was in 3 to 7 s after arrival each time; the game stayed up. The rest
-  of the soak did not run: another session restarted the harness server and took the game.
+- **Courses:** Titan solo, Alexander with the party and two Grasslands courses, 90 s of combat autopilot each. The
+  stage was in 3 to 7 s after arrival each time; the game stayed up.
+- **Soak before release: 8 visits, no crash** (13:44 to 14:05, one game process since 13:14). Grasslands and Corel
+  courses, Titan, Phoenix and Bahamut Arisen, solo and with the party, about 45 s of combat autopilot each, the stage
+  forced. Each Midgar visit was in place 4 s after arrival. The Phoenix course ran on the plain simulator: it needs
+  28.3 m of room and the stage has 25 m, so the mod left it out, as designed (`soak-midgar.log`).
 - **Two silent exits while streaming.** Twice the game froze two to four seconds into streaming a stage (once Midgar
   Outskirts, once the Tseng and Elena draft), stayed frozen for about a minute and closed, with no crash dump, Windows
   error or UE4SS log line. Both came after a harness server restart that day; seven loads before it and the loads since
