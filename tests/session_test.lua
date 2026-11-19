@@ -110,7 +110,7 @@ local game, saved, logged = fake(), {}, {}
 local session = new(game, {}, saved, logged)
 local course, options, start = session.course_selected(MU, defaults)
 eq(course.key, "COL30_GRASA_03_Free_vr", "course recognised")
-eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh,gilgamesh_garden",
+eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh,gilgamesh_garden,midgar_outskirts",
     "every unlocked stage with 18 m of room, from either continent")
 eq(start, 1, "picker starts on the simulator")
 session.choose(course, "gi_nattak")
@@ -182,7 +182,7 @@ eq(stage.id, "gi_nattak", "remembered stage reused")
 game = fake()
 session = new(game, { COL30_SUMMON_Odin_Free_vr = "lifestream" })
 course, options = session.course_selected(ODIN, defaults)
-eq(names(options), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden", "what is big enough for Odin")
+eq(names(options), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden,midgar_outskirts", "what is big enough for Odin")
 stage = session.course_confirmed(0, defaults)
 local void = stages.find(catalogue, "lifestream")
 eq(#game.requested, #void.levels + 1, "levels plus the sky")
@@ -243,7 +243,7 @@ eq(stage, nil, "no helper: simulator stage"); eq(why, "gi_nattak: needs the leve
 game = fake({ cleared = false, flags = { stfWorldReport_Finish_NIBLA_025 = true } })
 session = new(game, { COL30_GRASA_01_Free_vr = "gongaga" })
 course, options = session.course_selected(PLAIN, defaults)
-eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast",
+eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,midgar_outskirts",
     "the unlocked arena and the story bosses beaten by this point")
 stage, why = session.course_confirmed(0, defaults)
 eq(stage, nil, "locked choice not used"); eq(why, "gongaga: locked", "locked reason")

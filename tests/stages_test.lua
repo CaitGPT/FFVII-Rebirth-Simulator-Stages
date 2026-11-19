@@ -40,7 +40,7 @@ for _, stage in ipairs(catalogue.stages) do
     assert(stage.radius_m > 0 and stage.unlock, stage.id .. " size and unlock")
     assert(stage.id ~= stages.VANILLA, "reserved id")
 end
-eq(world, 6, "six open-world stages"); eq(streamed, 9, "nine stages from other maps")
+eq(world, 6, "six open-world stages"); eq(streamed, 10, "ten stages from other maps")
 for _, stage in ipairs(catalogue.stages) do
     assert(#stage.anchor == 3, stage.id .. " anchor")
     assert(stage.enabled == false or #stage.levels > 0, stage.id .. " levels")
@@ -111,17 +111,17 @@ eq(stages.blocked(grasslands, phoenix, context({ continent = "EASTC" }), move), 
 
 -- What the picker offers
 local options, left_out = stages.options(catalogue, ordinary, context(), defaults)
-eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,gilgamesh,gilgamesh_garden", "every stage for an ordinary course, anywhere")
+eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,gilgamesh,gilgamesh_garden,midgar_outskirts", "every stage for an ordinary course, anywhere")
 eq(#left_out, 0, "nothing left out")
-eq(ids(stages.options(catalogue, odin, context(), defaults)), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden", "what is big enough for Odin")
+eq(ids(stages.options(catalogue, odin, context(), defaults)), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden,midgar_outskirts", "what is big enough for Odin")
 eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress = 2000, flag = function(n) return n == "stfWorldReport_Finish_NIBLA_025" end }), defaults)),
-    "vanilla,nibel", "only what is unlocked")
+    "vanilla,nibel,midgar_outskirts", "only what is unlocked (Mt. Nibel from Chapter 2; Midgar Outskirts from the start)")
 eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress = 7000, flag = function() return false end }), defaults)),
-    "vanilla,mythril_golem,grasptropod", "story bosses beaten by Chapter 7")
+    "vanilla,mythril_golem,grasptropod,midgar_outskirts", "story bosses beaten by Chapter 7")
 eq(ids(stages.options(catalogue, ordinary, context({ can_stream = false }), defaults)), "vanilla", "nothing without the helper")
 options, left_out = stages.options(catalogue, ordinary, context({ can_stream = false }), move)
 eq(ids(options), "vanilla,corel,gongaga,cosmo,nibel", "moved: the west's arenas")
-eq(#left_out, 11, "moved: two east arenas and nine stages that can only be streamed left out")
+eq(#left_out, 12, "moved: two east arenas and ten stages that can only be streamed left out")
 eq(#stages.options(catalogue, course("COL30_NIBLS_01_Free_Colvr"), context(), defaults), 0, "Shinra Manor course: no picker")
 -- Another mod's courses: recognised by the title it puts on screen and by its title id
 local index = stages.title_index(catalogue)
@@ -200,7 +200,7 @@ eq(stages.continent_of("Something_Else", catalogue.vr_stage), nil, "unknown volu
 -- Experimental stages are not offered unless asked for
 local plain = stages.parse_settings("")
 eq(plain.experimental, false, "experimental is off by default")
-eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock,mythril_golem,gi_nattak,galian_beast,gilgamesh_garden", "only the working stages by default")
+eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock,mythril_golem,gi_nattak,galian_beast,gilgamesh_garden,midgar_outskirts", "only the working stages by default")
 eq(stages.blocked(corel, ordinary, context(), plain), "not working yet", "an arena stage by default")
 eq(stages.blocked(void, ordinary, context(), plain), nil, "the white void by default")
 

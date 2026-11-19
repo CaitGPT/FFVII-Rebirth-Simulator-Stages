@@ -3,6 +3,23 @@
 Newest first. Each line is something observed, with where the evidence is. Screenshots and logs are outside Git, in
 `D:\FF7RebirthModding\Mods\SimulatorStages\evidence\`.
 
+## 2026-11-19: Midgar Outskirts, and four drafts cut (1.2.0)
+
+- **Midgar Outskirts loads and looks right.** Photo-mode views from the centre show the Sector 5 wall, the plate
+  overhead, the reactor, fences and fires in daylight (`outskirts-views-20261119.jpg`). With one collision cell the
+  ground ended about 6 m east of the centre; with the outer wall's four cells and their physics cells, the capsule probe
+  found ground within 60 cm of the centre's height across the arena. The downed helicopters are not there: the story
+  places them (`VE0015_00_FallenHeli_Standard`), and `LoadAsset` returns an invalid object for their model.
+- **Courses:** Titan solo, Alexander with the party and two Grasslands courses, 90 s of combat autopilot each; then
+  visit 1 of a soak (Grasslands, solo). The stage was in 3 to 7 s after arrival each time; the game stayed up. The rest
+  of the soak did not run: another session restarted the harness server and took the game.
+- **Two silent exits while streaming.** Twice the game froze two to four seconds into streaming a stage (once Midgar
+  Outskirts, once the Tseng and Elena draft), stayed frozen for about a minute and closed, with no crash dump, Windows
+  error or UE4SS log line. Both came after a harness server restart that day; seven loads before it and the loads since
+  were fine. The cause is not known.
+- **Cut:** Tseng and Elena (invisible-floor problem, as Reno and Rude's plaza), the Altar (wrong level set), both
+  reactor drafts (not the room meant). See `docs/research/NEXT-STAGES.md`.
+
 ## 2026-11-18, night: soak before release
 
 **43 stage loads and 41 exits after the 17:31 fix, no crash during a visit** (17:45 to 21:38, all six stages: Inside

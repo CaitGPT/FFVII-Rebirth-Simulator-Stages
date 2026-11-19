@@ -1,9 +1,10 @@
 # FFVII Rebirth Simulator Stages
 
 A FINAL FANTASY VII REBIRTH PC mod that lets you fight Chadley's Combat Simulator courses on other stages. Pick a
-course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Six stages are in
-this version: **Edge of Creation** and **Inside the Lifestream** from the final battle, **Gilgamesh's Garden**, and
-three boss arenas from the story: **Mythril Mine**, **Cave of the Gi** and **Shinra Manor**.
+course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Seven stages are in
+this version: **Edge of Creation** and **Inside the Lifestream** from the final battle, **Gilgamesh's Garden**,
+**Midgar Outskirts** from the prologue, and three boss arenas from the story: **Mythril Mine**, **Cave of the Gi** and
+**Shinra Manor**.
 
 **Spoiler note:** the stages, their names and the pictures of them come from the story, the final battle included.
 
@@ -26,16 +27,19 @@ tells the story, dead ends included.
 - **Mythril Mine.** The cavern where the Mythril Golem is fought.
 - **Cave of the Gi.** The chamber where Gi Nattak is fought, lit as in that fight.
 - **Shinra Manor.** The basement where the Galian Beast is fought, with its props and its floor door closed.
+- **Midgar Outskirts.** The rocky ground outside Sector 5's wall where Zack fights Shinra's soldiers in the prologue,
+  with its fires, fences, the plate overhead and the reactor. The downed helicopters from that fight are not included.
 - **Which courses.** Every Combat Simulator course, including the summon courses, the Combat Training tutorials and
   the three courses our [Training Dummy](https://github.com/CaitGPT/FFVII-Rebirth-Training-Dummy) mod adds. The eight
   Shinra Manor courses are left as they are. A stage is only offered for courses whose enemies have room on it: the
   three story arenas are smaller than the simulator's arena, so the summon courses that need the most room (Phoenix,
-  Alexander and Odin) offer only the larger stages, and Shinra Manor fits only the smaller courses.
+  Alexander and Odin) offer only the larger stages (Midgar Outskirts among them), and Shinra Manor fits only the smaller courses.
 - **Unlocking.** Edge of Creation and Inside the Lifestream unlock when you have finished the game (once Chapter
-  Select is open). Gilgamesh's Garden unlocks when Gilgamesh's quests are complete. Mythril Mine, Cave of the Gi and
-  Shinra Manor unlock as the story reaches them (from Chapters 4, 11 and 12).
-- **No invisible walls.** The simulator's own walls and pillars stop colliding on every stage, and on the three story
-  arenas its floor goes too, so you stand on the arena's own floor and stop at its own walls.
+  Select is open). Gilgamesh's Garden unlocks when Gilgamesh's quests are complete. Midgar Outskirts is offered from
+  the start. Mythril Mine, Cave of the Gi and Shinra Manor unlock as the story reaches them (from Chapters 4, 11 and
+  12).
+- **No invisible walls.** The simulator's own walls and pillars stop colliding on every stage, and on Midgar Outskirts and
+  the three story arenas its floor goes too, so you stand on the arena's own floor and stop at its own walls.
 - **No visible swap.** The stage loads behind a black screen, which lifts once it is in place.
 
 Nothing is written to your save. The mod changes no game files: it loads the stage's own levels beside the simulator
@@ -105,8 +109,9 @@ The other settings in the file are for development.
 The design includes each region's boss arena, unlocked by beating that region's boss, and the arenas of open-world
 bosses such as the Grasptropod, the Anuran Suppressor and Gilgamesh's island. They are in `data/stages.json` but do not
 work yet: their ground is open-world terrain, which does not show when its level is loaded elsewhere. We also tried
-the Temple of the Ancients arena (Reno and Rude) and left it out: parts of its floor and its Lifestream sky did not
-come with it. [How it works](docs/HOW-IT-WORKS.md) says what we tried.
+the Temple of the Ancients arenas (Reno and Rude, then Tseng and Elena) and left them out: parts of their floors
+come from story events and did not come with them, and Reno and Rude's Lifestream sky did not either. Drafts of the
+Altar at the Forgotten Capital and a reactor arena were dropped as well. [How it works](docs/HOW-IT-WORKS.md) says what we tried.
 
 ## Build from source
 

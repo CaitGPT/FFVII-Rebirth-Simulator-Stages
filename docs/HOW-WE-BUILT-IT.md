@@ -142,6 +142,23 @@ and on arrival the screen flickered from the simulator to the stage.
   its Lifestream ribbons are effects the story spawns. Neither is placed in a level, and loading them would need assets
   from disk that UE4SS's Lua cannot load on this game. The owner cut the stage.
 
+## Version 1.2.0: Midgar Outskirts, and four drafts that did not make it
+
+The owner asked for four more places, with reference screenshots: Tseng and Elena's arena in the Temple, the Altar at
+the Forgotten Capital, a reactor atrium, and the spot outside Midgar where Zack fights beside the downed helicopters.
+Another session had the game, so each was drafted from the game's files first: the boss's territory in its area's
+battle tables, the streaming volume the game uses there, the sky its cutscenes name, and the collision cells nearby.
+
+In the game, only Midgar Outskirts held up. Its first load had ground on one side only; the outer wall's other three
+collision cells fixed that, and a probe that drops the leader on a grid found the ground level across the arena. The
+helicopters are prop models that the story script places; their model is not in memory in the simulator, so they would
+need the helper to load it from disk. The owner was happy without them.
+
+The others were cut. Tseng and Elena's courtyard loaded several metres above its floor at first; lowered, it had the
+same invisible-floor trouble as Reno and Rude's plaza. The Altar's level set turned out to be Jenova's tissue, not the
+tiled floor of the fight. Neither reactor draft was the room the owner meant. A detour back to Reno and Rude's plaza,
+which had already been cut, cost a test session; the owner caught it.
+
 ## The crashes
 
 The game crashed every hour or two with the same fault inside UE4SS. Disassembled, the faulting code reads an object's

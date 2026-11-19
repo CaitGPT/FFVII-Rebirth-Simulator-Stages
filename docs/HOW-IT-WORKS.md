@@ -147,6 +147,20 @@ Each loads the rooms round its boss's territory, centred on the territory and lo
 Clear radius: the mine 15 m, the cave 18 m, the manor 13 m, so the largest summon courses do not offer them. Unlock
 by chapter progress (Chapters 4, 11 and 12), an approximation of when the story reaches each.
 
+### Midgar Outskirts (`midgar_outskirts`)
+
+Zack's prologue fight outside Sector 5's wall. Its two battle territories (`4000MIDGR_mob_01` and `_02`) share a
+centre at (-470, 68340, 60) with an escape wall 50 m across. It loads the `020_5thOutWall` set that the area's
+`EndStreamingVolume_5thOutWall` loads there (terrain, light, effects, glow, the gate, physics), the day time set, and the
+outer wall's four `Terrain_Grid` collision cells with their `GridPhys` cells. With one cell, the ground ended about 6 m
+east of the centre; with all four, the capsule probe found ground within 60 cm of the centre's height across the arena.
+Its sky is `ZaxSky_Day`, which the prologue cutscenes name. The simulator's floor goes (`own_ground`). Clear radius 25 m,
+so every summon course offers it. Offered from the start.
+
+The three downed helicopters are not included. The story script places them (prop model
+`VE0015_00_FallenHeli_Standard`, at markers in `4000-MIDGR_LevelPlan_Resident`), and the model is not in memory in the
+simulator; placing them would need the native helper to load it from disk.
+
 ### Planned stages that do not work yet
 
 The six regional boss arenas and the open-world boss arenas (Grasptropod, Anuran Suppressor, Gilgamesh's island) are
@@ -158,6 +172,11 @@ the simulator had been visited; a first visit after starting the game is unteste
 The Temple of the Ancients arena (Reno and Rude) was built and then removed: parts of its floor are skeletal meshes
 that the cutscene before the fight moves into place, and its Lifestream ribbons are effects the story spawns, not
 placed in any level. Both would need assets loaded from disk, which UE4SS's Lua cannot do on this game.
+
+For 1.2.0 we drafted four more stages and kept only Midgar Outskirts. Tseng and Elena's courtyard on the Temple's
+second floor had the same invisible-floor problem as Reno and Rude's plaza. The Altar at the Forgotten Capital's set
+showed Jenova's tissue rather than the fight's tiled floor. Neither reactor draft was the room the owner meant.
+[Next stages research](research/NEXT-STAGES.md) keeps the details.
 
 ## The native helper
 
