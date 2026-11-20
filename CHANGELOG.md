@@ -1,5 +1,36 @@
 # Changelog
 
+## 1.3.0 (2026-11-20)
+
+- **Temple of the Ancients**: the hall in the Temple's maze where the Red Dragon is fought, as in the fight's second
+  phase, when gravity reverses. The game stages that phase in a second, upside-down copy of the hall below the first;
+  the stage loads that copy. It stands on its own floor, has room for every summon course except Odin's and Phoenix's,
+  and unlocks in Chapter 13. ([issue 3](https://github.com/CaitGPT/FFVII-Rebirth-Simulator-Stages/issues/3))
+- **Character lighting on stages**: a stage can now name the light environment that lights characters, and the
+  simulator's own is switched off for the visit. On the Temple stage the party was near-black without this.
+- **Temple of the Ancients' light**: the second-phase hall is the first-phase hall built upside down, so its
+  colonnade is at the top and the sun only reaches the upper walls, which glared white over a dark floor. The stage
+  now moves one of the hall's own unused lamps inside the colonnade, aimed down into the hall, for warm light on the
+  floor, walls and party, and switches off the terrain's shadow culling for the visit, which made the light jump
+  across the walls as the camera moved. New stage fields: `lamp`, `render_settings` (put back after the visit).
+- **Replay**: the stage picker's first row is now "Replay: <stage>", the last stage you picked on any course, when
+  the selected course can use it, so it is one press away.
+- **No fighting in the dark**: players reported fights starting while the black screen that hides the stage's arrival
+  was still up. The game starts the fight on its own schedule, and on machines that load faster than ours it started
+  before the mod had finished setting up the stage. A fight that begins behind the black screen is now held still
+  until the screen lifts.
+- **Proton (Linux, Steam Deck, Steam Machine)**: a player on Proton had the game crash at start-up with 1.2.0, within
+  a tenth of a second of the native helper starting. The helper now starts more carefully:
+  - it checks the game's code once, as UE4SS starts, under an exception guard, instead of on the game's own thread at
+    its first frame;
+  - it does nothing on the game's thread until 10 s after start-up;
+  - it never writes to the UE4SS log from the game's thread;
+  - its search of the game's memory (used on the Steam copy) reads only memory the system reports as readable;
+  - it writes each start-up step to `stages-helper-trace.txt` in the mod's folder, so a crash shows how far it got.
+
+  Tested on Windows (the Epic copy, and the Steam copy's search path forced on the Epic copy); not yet confirmed on
+  Proton.
+
 ## 1.2.0 (2026-11-19)
 
 - **Midgar Outskirts**: the rocky ground outside Sector 5's wall where Zack fights Shinra's soldiers in the prologue,

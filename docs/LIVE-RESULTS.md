@@ -3,6 +3,88 @@
 Newest first. Each line is something observed, with where the evidence is. Screenshots and logs are outside Git, in
 `D:\FF7RebirthModding\Mods\SimulatorStages\evidence\`.
 
+## 2026-11-19/20: the helper for Proton, and the Red Dragon's hall (1.3.0)
+
+- **The Proton crash (player report, Steam 1.005 on CachyOS with Proton, UE4SS c0a8d4c + our 1.005 fix, no other
+  mods).** Three logs: each stops 1 to 87 ms after the helper's `level helper ready`, before any of the mod's Lua runs,
+  with no crash dump. The player's console settings were already off; the built-in UE4SS mods were not the cause
+  (the crash came with them disabled too). Under Proton the image loads at 0x140000000 and UE4SS is ready 3.5 s after
+  launch (about 18 s on Windows). Not reproduced on Windows: the player's exact setup on the Epic copy (community
+  `mods.txt`, our fix, 1.2.0) and a helper forced onto the Steam copy's search path both started normally.
+- **What changed in the helper (1.3.0):** the code checks and the Steam search run once in `on_unreal_init`, on UE4SS's
+  thread, under `__try`; the game-thread callback does nothing until 10 s after that; log lines from the game thread are
+  queued and written from `on_update`; `QwordsEqual` reads only committed, readable pages of readable sections, under
+  `__try`; every start-up step goes to `stages-helper-trace.txt`. Live on the Epic copy: the search build
+  (`BA45CB69...`) found both by pattern in 250 ms on UE4SS's thread, armed 10 s later, and streamed Midgar Outskirts
+  (16 levels, in 5.2 s, 40 s of combat); the release build (`BA1AF389...`) recognised `epic-1.005` from its table and
+  armed 10 s later. Proton itself is untested.
+- **Temple of the Ancients, the Red Dragon's hall (issue 3).** Territory `TEMPL_RedDragon` at (-33380, -72720, -7290).
+  The game's own volume for the fight, `3110-StreamingVolume_Env_MazeRoomA_Boss`, 4 m away, loads the eight
+  `025_RedRoomA` levels, and its physics volume adds `RedRoomA_Physics` and `RedRoomB_Physics`. The fight's scenes
+  (EV_FOREE_8020, 8090: "VS Red Dragon") use the `TimeSet_Maze` switch; the maze's scenes use `IslandSky_DayMaze`.
+  - First load at the territory's height: the view went white. The party had fallen 46 m (the simulator's floor is off
+    on a stage with its own ground) and the room's meshes were 50 m above it. With the maze's height fogs hidden it was
+    black: nothing around. The room's floor is at -2320 (its gimmick pieces sit at -2318), not at the marker.
+  - At -2320: the paved hall, the colonnade, walls and the sun's shafts through the columns (`rd-4.png`). The capsule
+    probe found floor within 15 cm of the simulator's height over about 40 m by 45 m; walls at 19 m (north) to 33 m.
+    Centred 0.8 m east and 4.5 m south of the marker, the nearest wall is 22.3 m away in 24 directions: radius 22 m.
+  - A strip of flat blue shows past one corner at some camera angles. Not removed by the island day sky (no sun shafts:
+    darker), the first-floor maze sky (`DayMaze1st`, looks the same as `DayMaze`), the next room (`RedRoomB`) or the
+    maze rooms the fight's scenes also stream (`MazeRoomA`, `MazeRoomB`); hiding the simulator's sky and its terrain
+    backdrop did not either.
+  - **Owner (photo mode, with screenshots of the real fight): the blue is missing wall.** The real hall is closed in by
+    tall patterned walls. In photo mode two sides of ours were a low parapet with open blue above (`rdwall-sheet`).
+    Not fixed by: every Temple and forest terrain level loaded beside it (76), the maze shell (`020_1th_MazeRoom_Terrain`),
+    the temple exterior, the world sky level, forcing the terrain's streaming proxies to full detail, or the renderer's
+    console variables (`r.MassiveEnvironment.*` HZB culling off, screen-size thresholds 0, LOD scales 16, simple
+    instancing off; `r.Streaming.MassiveEnvironmentFullyLoad 1` with a 3000 MB pool, set before the load). The same
+    walls were missing from 21 m off-centre. Turned 180 degrees, the hall's massive-environment terrain did not draw
+    at all (its other actors and collision did turn): that renderer follows a move, not a turn. The terrain has no
+    materials (468 texture imports) and its bulk data streams fine elsewhere (Midgar's is 73 MB).
+  - **The second phase is a second hall.** `RedRoomB`'s pieces are at the same x and y as `RedRoomA`'s, 97 m lower,
+    rolled 180 degrees: the game stages the gravity-reversed phase in an upside-down copy, which the fight's physics
+    volume loads with the first. Its walking surface (the copy's vault) is flat at -15479 over 48 m by 48 m with a
+    1.6 m ledge round it; the walls are 24.2 to 24.7 m from the centre (31 m into the corners), symmetric. It draws in
+    full (`rd-roomb-photomode.png`). The stage now uses it (owner's request: the second phase's arena).
+  - **Lighting (owner: the characters were too dark).** No lamps near the second hall (all of `RedRoomA_Light`'s 60
+    light components are 130-140 m above its floor); the level BuiltData are empty. Characters take ambient light and
+    exposure from PrecomputedLightEnvironment components. The simulator's own (`0000-COMON_VR_Light`) stayed on under
+    the stage: characters near-black. `TimeSet_Maze`'s `DoorA_1` alone lit and shaded them; `DoorA_2` alone was darker;
+    `PLEA_MazeRoomA` (`TimeSet_MazeRoomA`) or `TimeSet_Maze_2th`'s alone washed the picture out (`rd-light-environments.png`).
+    The brightness probes (`PrecomputedBrightnessEnvironmentComponent.ExposureDataArray[].Position`) keep the map's
+    coordinates, so they are moved by the level's offset. New stage fields: `light_environment`,
+    `move_brightness_probes` (`rd-roomb-lit.png`).
+  - **Lighting, second round (owner: uneven and unnatural, walls glaring over a dark floor; the light jumped across
+    the walls when moving; reference shots of the real fight with sun stripes on a pale floor).** The reference shots
+    are the first-phase hall: its flagstone floor is this hall's ceiling, and this hall's colonnade is at the top.
+    With the stage sun's shadows off the floor lit pale, so it takes the sun; with them on no angle reached it:
+    pitch 28 to 70 degrees from all four sides, and the sun turned to shine upwards. Not the cause: the simulator's
+    massive terrain (moved 200 m down, no change). A spotlight inside the colonnade flooded the floor evenly; 80 m out
+    the colonnade's depth blocked it, as it blocks the sun. Two looks shown to the owner: the sun at 1500 with one of
+    the light level's unused spotlights as a shadowless fill from above (`exp-modlook`), and that spotlight inside the
+    colonnade at full strength (`exp-orange`). The owner preferred the warm one, a little less orange. The lamp is
+    white with colour temperature off: the orange is the strong light on the warm stone, so lowering its strength
+    only darkened it and stayed red; a cool tint (0.62, 0.8, 1.0) at full strength turned it golden (`exp-tint1` to
+    `exp-tint4`). Released: that lamp, the game's sun as it is, and the massive-environment shadow culling off for
+    the visit.
+  - **Fights starting behind the black screen (player reports).** Live with the new code: the game began the fight
+    2.4 s after arrival, before the stage was set up; the mod held the world's clock (global time dilation 0.0001)
+    for 3 s and let it go as the screen lifted.
+  - **Turned start (owner: face the solid wall rather than the colonnade), dropped.** The simulator starts the party
+    8 m out on +X facing -X, a colonnade. Turning the party, the enemies and the camera round the centre held for
+    about a second, then the game put everyone back at the fight's real start; turning the simulator volume's target
+    (`TargetRotationDegree`) did not move the start at all. The owner dropped it.
+  - **Replay row.** "Replay: Temple of the Ancients" was the picker's first row after a Temple visit, and choosing it
+    loaded the Temple.
+  - **Release soak (the 1.3.0 zip's scripts and helper, 14:26 to 14:48): 8 visits, no crash.** The Temple from a
+    Grasslands course (through Replay), Titan's and Alexander's summon courses and a Corel course; Midgar Outskirts
+    twice (once through Replay); Cave of the Gi twice (once through Replay), each fought by the autopilot. Every visit
+    the game began the fight before the stage was set up; the mod held it and let it go as the screen lifted (black
+    screen off 3.0 to 6.6 s after arrival). The Temple's lamp and render settings were applied on each Temple visit,
+    and the render settings were back to the game's values afterwards (`soak-130.txt`).
+  - Crashes during this work: two `UE4SS.dll+0x6a8c4f` (after stage visits, on the plain simulator), one
+    `VCRUNTIME140.dll` memcpy 5 s after a stage unloaded with `r.Streaming.MassiveEnvironmentFullyLoad 1` set by hand.
+
 ## 2026-11-19: Midgar Outskirts, and four drafts cut (1.2.0)
 
 - **Midgar Outskirts loads and looks right.** Photo-mode views from the centre show the Sector 5 wall, the plate

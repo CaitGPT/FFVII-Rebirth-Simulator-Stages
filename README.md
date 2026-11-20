@@ -1,10 +1,10 @@
 # FFVII Rebirth Simulator Stages
 
 A FINAL FANTASY VII REBIRTH PC mod that lets you fight Chadley's Combat Simulator courses on other stages. Pick a
-course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Seven stages are in
+course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Eight stages are in
 this version: **Edge of Creation** and **Inside the Lifestream** from the final battle, **Gilgamesh's Garden**,
-**Midgar Outskirts** from the prologue, and three boss arenas from the story: **Mythril Mine**, **Cave of the Gi** and
-**Shinra Manor**.
+**Midgar Outskirts** from the prologue, and four boss arenas from the story: **Mythril Mine**, **Cave of the Gi**,
+**Shinra Manor** and the **Temple of the Ancients**.
 
 **Spoiler note:** the stages, their names and the pictures of them come from the story, the final battle included.
 
@@ -29,25 +29,37 @@ tells the story, dead ends included.
 - **Shinra Manor.** The basement where the Galian Beast is fought, with its props and its floor door closed.
 - **Midgar Outskirts.** The rocky ground outside Sector 5's wall where Zack fights Shinra's soldiers in the prologue,
   with its fires, fences, the plate overhead and the reactor. The downed helicopters from that fight are not included.
+- **Temple of the Ancients.** The hall in the Temple's maze where the Red Dragon is fought, as in the fight's second
+  phase, when gravity reverses: patterned walls on every side, the colonnade's windows and the diamond-panelled
+  vault. The game stages that phase in an upside-down copy of the hall, which the stage loads, lit warmly by one of
+  the hall's own lamps set inside the colonnade.
 - **Which courses.** Every Combat Simulator course, including the summon courses, the Combat Training tutorials and
   the three courses our [Training Dummy](https://github.com/CaitGPT/FFVII-Rebirth-Training-Dummy) mod adds. The eight
   Shinra Manor courses are left as they are. A stage is only offered for courses whose enemies have room on it: the
   three story arenas are smaller than the simulator's arena, so the summon courses that need the most room (Phoenix,
-  Alexander and Odin) offer only the larger stages (Midgar Outskirts fits Alexander and Odin, not Phoenix), and Shinra Manor fits only the smaller courses.
+  Alexander and Odin) offer only the larger stages (Midgar Outskirts fits Alexander and Odin, not Phoenix; the Temple
+  of the Ancients fits Alexander, not Odin or Phoenix), and Shinra Manor fits only the smaller courses.
 - **Unlocking.** Edge of Creation and Inside the Lifestream unlock when you have finished the game (once Chapter
   Select is open). Gilgamesh's Garden unlocks when Gilgamesh's quests are complete. Midgar Outskirts is offered from
-  the start. Mythril Mine, Cave of the Gi and Shinra Manor unlock as the story reaches them (from Chapters 4, 11 and
-  12).
+  the start. Mythril Mine, Cave of the Gi, Shinra Manor and the Temple of the Ancients unlock as the story reaches
+  them (from Chapters 4, 11, 12 and 13).
 - **No invisible walls.** The simulator's own walls and pillars stop colliding on every stage, and on Midgar Outskirts and
-  the three story arenas its floor goes too, so you stand on the arena's own floor and stop at its own walls.
-- **No visible swap.** The stage loads behind a black screen, which lifts once it is in place.
+  the four story arenas its floor goes too, so you stand on the arena's own floor and stop at its own walls.
+- **No visible swap.** The stage loads behind a black screen, which lifts once it is in place. If the game starts the
+  fight before then, the fight is held still until the screen lifts.
+- **Replay.** The picker's first row is "Replay: <stage>", the last stage you picked, when the course can use it.
 
 Nothing is written to your save. The mod changes no game files: it loads the stage's own levels beside the simulator
 while you fight, and removes them when you leave.
 
 ## Requirements
 
-- FINAL FANTASY VII REBIRTH for PC, game version **1.005**. We tested on the Epic Games Store version only.
+- FINAL FANTASY VII REBIRTH for PC, game version **1.005**. We test on the Epic Games Store version. The Steam version
+  needs the helper to search the game's code for what it uses; we test that search on the Epic copy.
+- **Linux, Steam Deck and Steam Machine (Proton).** Version 1.2.0 crashed the game at start-up for a player on Proton.
+  1.3.0 changes how the native helper starts (see the changelog). We cannot run Proton ourselves, so this is not yet
+  confirmed. UE4SS itself needs the Steam launch option `WINEDLLOVERRIDES="dwmapi=n,b" %command%` there. If the game
+  still crashes, please send us `SimulatorStages/stages-helper-trace.txt` with your UE4SS log.
 - [RE-UE4SS FF7R](https://www.nexusmods.com/finalfantasy7rebirth/mods/267) (UE4SS 3.0.1) with a fix for game version
   1.005. We tested with our [UE4SS 1.005 Fix](https://www.nexusmods.com/finalfantasy7rebirth/mods/2521).
 - The mod includes a small native helper (`dlls/main.dll`) built for that UE4SS. It loads the stage's levels, which
@@ -109,8 +121,10 @@ The other settings in the file are for development.
 The design includes each region's boss arena, unlocked by beating that region's boss, and the arenas of open-world
 bosses such as the Grasptropod, the Anuran Suppressor and Gilgamesh's island. They are in `data/stages.json` but do not
 work yet: their ground is open-world terrain, which does not show when its level is loaded elsewhere. We also tried
-the Temple of the Ancients arenas (Reno and Rude, then Tseng and Elena) and left them out: parts of their floors
-come from story events and did not come with them, and Reno and Rude's Lifestream sky did not either. Drafts of the
+the Temple of the Ancients' upper arenas (Reno and Rude, then Tseng and Elena) and left them out: parts of their floors
+come from story events and did not come with them, and Reno and Rude's Lifestream sky did not either. The Red
+Dragon's hall is in, as the fight's second phase: drawn as the first phase, its tall walls on two sides do not
+appear. Drafts of the
 Altar at the Forgotten Capital and a reactor arena were dropped as well. [How it works](docs/HOW-IT-WORKS.md) says what we tried.
 
 ## Build from source

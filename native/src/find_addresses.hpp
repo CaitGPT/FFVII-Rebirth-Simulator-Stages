@@ -199,6 +199,25 @@ namespace Find
         return out;
     }
 
+    // Simulator Stages' own change (2026-11-19), so make_helper_source.py no longer copies this file: the scan
+    // below reads only committed, readable pages of readable sections, under an exception guard. A Steam player on
+    // Proton (Linux) crashed as the game started; Wine maps an image's sections with its own rules, and the old scan
+    // read every byte of every section on trust.
+    inline bool Readable(DWORD protect)
+    {
+        if(protect&(PAGE_GUARD|PAGE_NOACCESS)) return false;
+        return (protect&(PAGE_READONLY|PAGE_READWRITE|PAGE_WRITECOPY|PAGE_EXECUTE_READ|PAGE_EXECUTE_READWRITE|PAGE_EXECUTE_WRITECOPY))!=0;
+    }
+    // Plain function (no C++ objects) so __try may guard the reads. Offsets of matches go to hits (up to max);
+    // count is every match. False if a read faulted.
+    inline bool ScanQwords(const uint8_t* data,size_t size,uint64_t value,size_t* hits,size_t max,size_t& count)
+    {
+        __try {
+            for(size_t i=0;i+8<=size;i+=8)
+                if(*reinterpret_cast<const uint64_t*>(data+i)==value){ if(count<max) hits[count]=i; ++count; }
+            return true;
+        } __except(1) { return false; }
+    }
     // Every place in the image holding this 8-byte value on an 8-byte boundary.
     inline std::vector<uintptr_t> QwordsEqual(uint64_t value)
     {
@@ -207,15 +226,28 @@ namespace Find
         const auto* section=IMAGE_FIRST_SECTION(nt);
         for(unsigned s=0;s<nt->FileHeader.NumberOfSections;++s,++section)
         {
-            const uintptr_t rva=section->VirtualAddress;
+            if(!(section->Characteristics&IMAGE_SCN_MEM_READ) || (section->Characteristics&IMAGE_SCN_MEM_DISCARDABLE)) continue;
+            const uintptr_t rva=section->VirtualAddress&~uintptr_t(7);
             const size_t size=section->Misc.VirtualSize;
             if(size<8) continue;
-            const uint8_t* data=Base()+rva;
-            for(size_t i=0;i+8<=size;i+=8)
+            const uint8_t* const begin=Base()+rva;
+            const uint8_t* const end=begin+size;
+            for(const uint8_t* at=begin;at<end;)
             {
-                uint64_t here=0;
-                std::memcpy(&here,data+i,8);
-                if(here==value) out.push_back(rva+i);
+                MEMORY_BASIC_INFORMATION info{};
+                if(!VirtualQuery(at,&info,sizeof info)) break;
+                const uint8_t* regionEnd=static_cast<const uint8_t*>(info.BaseAddress)+info.RegionSize;
+                if(regionEnd<=at) break;
+                const uint8_t* const stop=regionEnd<end?regionEnd:end;
+                if(info.State==MEM_COMMIT && Readable(info.Protect))
+                {
+                    size_t hits[8]{}, count=0;
+                    if(ScanQwords(at,size_t(stop-at),value,hits,8,count))
+                        for(size_t h=0;h<count && h<8;++h) out.push_back(uintptr_t(at-Base())+hits[h]);
+                    // more than 8 in one region: the callers want exactly one, so a ninth is as good as many
+                    if(count>8) out.push_back(0);
+                }
+                at=stop;
             }
         }
         return out;

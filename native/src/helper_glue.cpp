@@ -1,5 +1,7 @@
+#include <mutex>
+#include <cstdio>
 // Simulator Stages level helper: this mod's own part. tools/make_helper_source.py stitches it together with
-// sections copied from Junon Colosseum's helper to make main.cpp. NOT YET RUN IN THE GAME (2026-11-16).
+// sections copied from Junon Colosseum's helper to make main.cpp.
 //
 // What it does: UE4SS 3.0.1's Lua cannot call LevelStreamingDynamic.LoadLevelInstance (the function's bool
 // out-parameter breaks the Lua argument stack), so this helper makes that one call. The Lua side writes requests to
@@ -8,17 +10,60 @@
 // stages-helper.txt twice a second so the Lua side can tell it is alive and able to work.
 //
 // It reads no game memory beyond what the copied sections check byte for byte, writes none, and changes no save.
+//
+// Proton (2026-11-19). A Steam player on Linux (Proton) crashed as the game started, within 90 ms of this helper's
+// "ready" line, before any of the mod's Lua ran; Windows never did. We could not run Proton, so 1.3.0 removes every
+// way this helper could touch the game early:
+//   - the checks on the game's code (and the pattern searches a Steam copy needs) run once, in on_unreal_init, on
+//     UE4SS's own thread, under an exception guard; they used to run on the game thread at its first Blueprint tick;
+//   - nothing runs on the game thread until ArmDelay after start-up, long before anyone reaches the simulator;
+//   - the game thread never writes to UE4SS's log: lines are queued and written by UE4SS's thread (on_update);
+//   - each step is written to stages-helper-trace.txt in the mod's folder as it happens, so a crash leaves a record
+//     of how far the helper got.
 namespace
 {
     std::atomic<bool> faulted{false};
+    std::string Shared(const char* name);   // below, with the other file paths
+    const ULONGLONG startedAt=GetTickCount64();
+    std::mutex traceLock;
+    // One line to stages-helper-trace.txt, opened, written and closed each time so it survives a crash. Rare
+    // events only (start-up steps, firsts, requests); never per frame.
+    void Trace(const std::string& line) noexcept
+    {
+        try {
+            std::lock_guard<std::mutex> hold(traceLock);
+            FILE* file=nullptr;
+            if(fopen_s(&file,Shared("stages-helper-trace.txt").c_str(),"ab") || !file) return;
+            fprintf(file,"%llu ms\tthread %lu\t%s\n",GetTickCount64()-startedAt,GetCurrentThreadId(),line.c_str());
+            fflush(file);
+            fclose(file);
+        } catch(...) {}
+    }
+    std::mutex sayLock;
+    std::vector<std::string> unsaid;
+    // A line for UE4SS's log. Any thread may call this; Flush() writes the lines from UE4SS's own thread.
     void Say(const std::string& line) noexcept
     {
-        std::string message="[SimulatorStages] "+line+"\n";
-        printf_s("%s",message.c_str());
+        Trace("say: "+line);
         try {
-            const std::wstring wide(message.begin(),message.end());
-            RC::Output::send(std::wstring_view(wide));
+            std::lock_guard<std::mutex> hold(sayLock);
+            if(unsaid.size()<64) unsaid.push_back("[SimulatorStages] "+line+"\n");
         } catch(...) {}
+    }
+    void Flush() noexcept
+    {
+        std::vector<std::string> lines;
+        try {
+            std::lock_guard<std::mutex> hold(sayLock);
+            lines.swap(unsaid);
+        } catch(...) { return; }
+        for(const auto& message:lines){
+            printf_s("%s",message.c_str());
+            try {
+                const std::wstring wide(message.begin(),message.end());
+                RC::Output::send(std::wstring_view(wide));
+            } catch(...) {}
+        }
     }
     // A check on the game's code failed: say so once and do no engine work. Junon Colosseum shows a window here;
     // this mod only loses its streamed stages, so a log line is enough.
@@ -174,6 +219,7 @@ namespace
     {
         static ULONGLONG next=0;
         if(now<next) return;
+        if(!next) Trace(std::string("game thread: first heartbeat, ready ")+(Loader::Verify()&&!faulted.load()?"1":"0"));
         next=now+500;
         const std::string path=Shared("stages-helper.txt");
         {
@@ -221,11 +267,35 @@ namespace
                     catch(const std::exception& error) { why=std::string("cpp_exception ")+error.what(); }
                     catch(...) { why="cpp_exception"; }
                     Ack(r.name,ok?std::string(r.unload?"unloaded":"loaded")+"\t"+std::to_string(now-r.at)+"ms":"refused\t"+why);
+                    static int traced=0;   // the first few requests, as a record of how far a session got
+                    if(traced<4){ ++traced; Trace(std::string(r.unload?"unload ":"load ")+std::string(r.name.begin(),r.name.end())+": "+(ok?"ok":why)); }
                     SafePoint::Close(object,function);
                 }
             }
         } catch(...) {}
         busy=false;
+    }
+
+    // Start-up checks on the game's code, run on UE4SS's thread before the game-thread callback can do anything.
+    // Resolves the game-thread slot (OnGameThread's first call; false on this thread) and verifies the loader.
+    void CheckGame() { OnGameThread(); Loader::Verify(); }
+    // Plain function (no C++ objects) so __try may guard it. False if a read faulted; the caller then turns streamed
+    // stages off, so nothing touched by the interrupted checks is used again.
+    bool CheckGameGuarded() noexcept
+    {
+        __try { CheckGame(); return true; }
+        __except(1) { return false; }
+    }
+    constexpr ULONGLONG ArmDelay=10000;   // ms after start-up before the game thread does any of this helper's work
+    std::atomic<ULONGLONG> armAt{0};      // 0: never (the checks failed)
+    bool Armed() noexcept
+    {
+        static std::atomic<bool> armed{false};
+        if(armed.load(std::memory_order_relaxed)) return true;
+        const ULONGLONG at=armAt.load();
+        if(!at || GetTickCount64()<at) return false;
+        if(!armed.exchange(true)) Trace("armed: game-thread work allowed from now");
+        return true;
     }
 
     class SimulatorStagesHelper : public RC::CppUserModBase
@@ -234,7 +304,7 @@ namespace
         SimulatorStagesHelper()
         {
             ModName = STR("Simulator Stages level helper");
-            ModVersion = STR("0.1.0");
+            ModVersion = STR("1.3.0");
             ModDescription = STR("Loads a stage's levels at the combat simulator's position for the Simulator Stages mod");
             ModAuthors = STR("CaitGPT");
         }
@@ -244,15 +314,27 @@ namespace
             std::filesystem::remove(Shared("stages-request.txt"),ec);   // nothing left over from an earlier run
             std::filesystem::remove(Shared("stages-ack.txt"),ec);
             std::filesystem::remove(Shared("stages-helper.txt"),ec);
+            std::filesystem::remove(Shared("stages-helper-trace.txt"),ec);
+            Trace("start: helper 1.3.0");
             SafePoint::Init();
+            Trace("start: names found");
+            const bool checked=CheckGameGuarded();
+            Trace(checked ? (faulted.load() ? "start: game checks done, streamed stages off" : "start: game checks done")
+                          : "start: game checks faulted, streamed stages off");
+            if(!checked) Fault("SS-CHECK","reading the game's code failed.",L"");
             RC::Unreal::Hook::RegisterProcessEventPreCallback([](auto* object,auto* function,void*) {
                 const char* kind=SafePoint::Kind(function);
                 if(!kind) return;                 // a name compare on every ProcessEvent, nothing more
+                if(!Armed()) return;              // nothing on the game thread until ArmDelay after start-up
                 if(!OnGameThread()) return;       // engine work only where the loader keeps its state
                 AtSafePoint(object,function,kind);
             });
+            Trace("start: callback registered");
+            if(!faulted.load()) armAt.store(GetTickCount64()+ArmDelay);
             Say("level helper ready");
+            Flush();
         }
+        void on_update() override { Flush(); }
     };
 }
 extern "C" __declspec(dllexport) RC::CppUserModBase* start_mod() { return new SimulatorStagesHelper(); }

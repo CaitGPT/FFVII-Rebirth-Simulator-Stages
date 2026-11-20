@@ -202,6 +202,41 @@ function M.black_screen(on, seconds)
     return pcall(function() api:ChangeFadeFilter(FName(BLACK_FILTER), clear, seconds or 0.4, true, false) end)
 end
 
+-- Has the fight begun? UEndBattleAPI.IsInBattle on its default object: no search. Called only after arrival in the
+-- simulator (at boot and on the title screen the battle functions crashed Battle Meters).
+local BATTLE_API = "/Script/EndGame.Default__EndBattleAPI"
+function M.in_battle()
+    local api = StaticFindObject(BATTLE_API)
+    if not valid(api) then return false end
+    return safe(function() return api:IsInBattle() end) == true
+end
+
+-- The world's clock held almost still (UGameplayStatics.SetGlobalTimeDilation at the engine's minimum), so a fight
+-- that begins behind the black screen waits for the player: players reported fights starting while it was still up
+-- on machines that load faster than ours (2026-11-20). Level streaming does not run on the world's clock. `on` false
+-- puts back the dilation that was there before. Returns true when it changed something.
+local HELD_DILATION = 0.0001
+local dilation_before = nil
+function M.hold_fight(on)
+    local statics = StaticFindObject("/Script/Engine.Default__GameplayStatics")
+    local context = safe(FindFirstOf, "PlayerController")
+    if not valid(statics) or not valid(context) then return false end
+    if on then
+        if dilation_before then return false end
+        local before = safe(function() return statics:GetGlobalTimeDilation(context) end)
+        if type(before) ~= "number" or before <= HELD_DILATION then before = 1 end
+        if pcall(function() statics:SetGlobalTimeDilation(context, HELD_DILATION) end) then
+            dilation_before = before
+            return true
+        end
+        return false
+    end
+    if not dilation_before then return false end
+    local before = dilation_before
+    dilation_before = nil
+    return pcall(function() statics:SetGlobalTimeDilation(context, before) end)
+end
+
 -- What makes up the simulator's own look, found ahead of the moment it goes and kept, so that moment only flips
 -- kept objects. Each FindAllOf here costs about 0.2 s (it walks the whole object table, measured 2026-11-17); eight
 -- of them at the swap froze the screen on the simulator's stage for two seconds. Returns how many things were found
@@ -542,6 +577,136 @@ local shown_actors = {}
 local LIGHT_CLASSES = { DirectionalLight = true, ExponentialHeightFog = true, PrecomputedLightEnvironmentActor = true,
     SphereReflectionCapture = true, VolumetricFogInjectionVolumeActor = true }
 local waiting_lights = {}
+
+-- Characters take their ambient light and exposure from the one light environment (PrecomputedLightEnvironment
+-- component) that is switched on where they stand. A stage that names `light_environment` (a fragment of its actor's
+-- name) gets only that one: its other light environments are switched off, and so is the simulator's own
+-- (0000-COMON_VR_Light), which otherwise stays on under the stage and leaves characters near-black (the Temple of
+-- the Ancients' second-phase hall, 2026-11-20). The simulator's is put back with the rest of its look
+-- (`set_dressing_hidden(false)`). Run once the stage's lights are on. Returns how many components were switched.
+function M.apply_light_environment(stage)
+    local want = stage and stage.light_environment
+    if not want then return 0 end
+    local marker = "SimStage_" .. stage.id .. "_"
+    local count = 0
+    for _, component in ipairs(safe(FindAllOf, "PrecomputedLightEnvironmentComponent") or {}) do
+        if valid(component) then
+            local name = safe(function() return component:GetFullName() end) or ""
+            if name:find(marker, 1, true) then
+                local on = name:find(want, 1, true) ~= nil
+                if pcall(function() component:SetVisibility(on, true) end) then count = count + 1 end
+            elseif name:find("0000-COMON_VR", 1, true) then
+                if pcall(function()
+                    component:SetHiddenInGame(true, true)
+                    component:SetVisibility(false, true)
+                end) then
+                    hidden_components[#hidden_components + 1] = ref(component)
+                    count = count + 1
+                end
+            end
+        end
+    end
+    return count
+end
+
+-- A stage's own look, from its data (both optional), for the visit:
+--   `lamp`: one of the stage's own spotlights (`actor`, by name) moved to `offset` from the arena's centre (`centre`), aimed by `pitch`
+--     and `yaw`, at the given strength, cone, reach, colour and shadows. The Temple's upside-down hall lets the sun
+--     reach only its upper walls, and a streamed copy has no baked lighting; one of its light level's unused lamps,
+--     moved inside the colonnade, lights it warmly (owner's choice, 2026-11-20);
+--   `render_settings`: console variables set for the visit and put back by `restore_render_settings`.
+-- Run whenever the light environment is applied (after the lights are on): repeats are harmless. Returns how many
+-- things it set.
+local saved_render = nil
+local function console(command)
+    local system = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+    local controller = safe(FindFirstOf, "PlayerController")
+    if not (valid(system) and valid(controller)) then return false end
+    return pcall(function() system:ExecuteConsoleCommand(controller, command, controller) end)
+end
+function M.apply_stage_look(stage, centre)
+    if not stage then return 0 end
+    local marker = "SimStage_" .. stage.id .. "_"
+    local count = 0
+    local lamp = stage.lamp
+    if lamp and centre then
+        for _, actor in ipairs(safe(FindAllOf, "SpotLight") or {}) do
+            if valid(actor) and (safe(function() return actor:GetFullName() end) or ""):find(marker, 1, true)
+                and (not lamp.actor or safe(function() return actor:GetFName():ToString() end) == lamp.actor) then
+                local light = safe(function() return actor.SpotLightComponent end)
+                if valid(light) and pcall(function()
+                    actor.RootComponent:SetMobility(2)
+                    actor:K2_SetActorLocation({ X = centre.X + lamp.offset[1], Y = centre.Y + lamp.offset[2],
+                        Z = centre.Z + lamp.offset[3] }, false, {}, true)
+                    actor:K2_SetActorRotation({ Pitch = lamp.pitch, Yaw = lamp.yaw, Roll = 0 }, true)
+                    light:SetAttenuationRadius(lamp.radius)
+                    light.OuterConeAngle = lamp.outer_cone
+                    light.InnerConeAngle = lamp.inner_cone
+                    if lamp.color then
+                        light:SetLightColor({ R = lamp.color[1], G = lamp.color[2], B = lamp.color[3], A = 1.0 }, true)
+                    end
+                    light:SetCastShadows(lamp.shadows == true)
+                    light:SetIntensity(lamp.intensity)
+                    light:SetVisibility(true, true)
+                    actor:SetActorHiddenInGame(false)
+                end) then count = count + 1 end
+                break
+            end
+        end
+    end
+    if stage.render_settings then
+        local system = StaticFindObject("/Script/Engine.Default__KismetSystemLibrary")
+        if not saved_render then
+            saved_render = {}
+            for name in pairs(stage.render_settings) do
+                saved_render[name] = valid(system) and safe(function() return system:GetConsoleVariableIntValue(name) end) or nil
+            end
+        end
+        for name, value in pairs(stage.render_settings) do
+            if console(name .. " " .. tostring(value)) then count = count + 1 end
+        end
+    end
+    return count
+end
+
+-- Puts back the console variables a stage's `render_settings` changed. Returns how many.
+function M.restore_render_settings()
+    if not saved_render then return 0 end
+    local count = 0
+    for name, value in pairs(saved_render) do
+        if type(value) == "number" and console(name .. " " .. tostring(math.floor(value))) then count = count + 1 end
+    end
+    saved_render = nil
+    return count
+end
+
+-- Brightness environment components keep their probes' places (ExposureDataArray[i].Position) in the map's own
+-- coordinates, which do not move with a level streamed elsewhere, so the game would set the exposure from probes
+-- 170 km away. For a stage with `move_brightness_probes`, each probe in this visit's copies is moved by its level's
+-- offset (the `plan` item's location). Once per visit: every visit streams fresh copies. Returns how many probes.
+function M.move_brightness_probes(stage, plan)
+    if not (stage and stage.move_brightness_probes and plan) then return 0 end
+    local count = 0
+    for _, component in ipairs(safe(FindAllOf, "PrecomputedBrightnessEnvironmentComponent") or {}) do
+        local name = valid(component) and (safe(function() return component:GetFullName() end) or "") or ""
+        for _, item in ipairs(plan) do
+            if name ~= "" and name:find(item.name .. ".", 1, true) then
+                pcall(function()
+                    local probes = component.ExposureDataArray
+                    for i = 1, #probes do
+                        local p = probes[i].Position
+                        p.X = p.X + item.location.X
+                        p.Y = p.Y + item.location.Y
+                        p.Z = p.Z + item.location.Z
+                        count = count + 1
+                    end
+                end)
+                break
+            end
+        end
+    end
+    return count
+end
 
 -- Is any of the simulator's own lighting, effect or sky levels visible right now? One search.
 function M.simulator_lighting_visible(vr_stage)

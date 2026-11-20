@@ -80,6 +80,39 @@ The order matters. If the stage's lights come on while the simulator's own light
 scene stays dull after those are hidden (seen on Inside the Lifestream). The mod switches the stage's lights on only
 while none of the simulator's lighting levels is visible, or after 12 s regardless.
 
+Characters are lit by more than the lamps. They take their ambient light and exposure from a light environment
+(`PrecomputedLightEnvironmentComponent`), and the exposure also from brightness probes
+(`PrecomputedBrightnessEnvironmentComponent`). Two things go wrong when a stage is streamed:
+
+- The simulator's own light environment (in `0000-COMON_VR_Light`) stays on under the stage, and a stage's light levels
+  can bring several of their own. A stage that names `light_environment` keeps only that one on and switches the
+  simulator's off for the visit (it is put back with the rest of the simulator's look).
+- The brightness probes keep their places in the map's own coordinates, which do not move with the level. A stage with
+  `move_brightness_probes` has them moved by its levels' offset.
+
+Without both, the party on the Temple of the Ancients stage was near-black.
+
+A stage can also set its own look for the visit. The Temple's second-phase hall is the first-phase hall built upside
+down: its colonnade is at the top, so the game's sun lights only the upper walls, and a streamed copy has no baked
+light to fill the rest. `lamp` moves one of the stage's own spotlights (by name) to a place relative to the arena's
+centre and aims and sets it: the Temple's is one of its light level's unused lamps, put inside the colonnade on the
+side the sun comes from and aimed down into the hall, with a cool tint so the warm stone does not turn orange.
+`render_settings` sets console variables for the visit and puts back the game's values afterwards (the Temple switches
+off the massive-environment shadow culling, which made the sunlit patches jump as the camera moved).
+
+## The fight's start
+
+The game starts the fight on its own schedule once the simulator is loaded, which on a fast machine is before the mod
+has finished setting up a stage (2.4 s after arrival on ours, with the stage ready at about 6 s). If the fight begins
+behind the black screen, the mod holds the world's clock still (`SetGlobalTimeDilation` at the engine's minimum) and
+lets it go as the screen lifts.
+
+## The picker's Replay row
+
+The remembered choices (`choices.txt`, one `course key = stage id` per line) also keep the last stage picked on any
+course, as `last = <stage id>`. When the selected course can use that stage, the picker's first row is
+"Replay: <stage name>", so the last stage is one press away; the stage keeps its own row further down too.
+
 ## The stages
 
 `data/stages.json` describes each stage; `tools/build_lua_data.py` writes it into `Scripts/stage_data.lua`.
@@ -93,6 +126,8 @@ while none of the simulator's lighting levels is visible, or after 12 s regardle
 | `anchor` | The point in the stage's own coordinates that lands on the simulator's centre: the arena's centre at the height of its ground |
 | `radius_m` | Clear radius the stage offers; a course is offered the stage if its enemies need no more |
 | `show_classes`, `keep_hidden` | See Lighting |
+| `light_environment`, `move_brightness_probes` | Character lighting: see Lighting |
+| `lamp`, `render_settings` | The stage's own look for the visit: see Lighting |
 | `fit` | Stretch along X and Y about the arena's centre, and which actors to stretch, move or leave alone |
 | `unlock` | A story flag, a chapter progress, or the game finished |
 | `experimental` | Not offered unless the `experimental` setting is on |
@@ -160,6 +195,20 @@ so every summon course but Phoenix's (28.3 m) offers it. Offered from the start.
 The three downed helicopters are not included. The story script places them (prop model
 `VE0015_00_FallenHeli_Standard`, at markers in `4000-MIDGR_LevelPlan_Resident`), and the model is not in memory in the
 simulator; placing them would need the native helper to load it from disk.
+
+### Temple of the Ancients (`red_dragon`)
+
+The Red Dragon's hall in the Temple's maze, as in the fight's second phase. Territory `TEMPL_RedDragon`; the game's own
+volume for the fight (`3110-StreamingVolume_Env_MazeRoomA_Boss`) loads the `025_RedRoomA` levels, and its physics volume
+adds `RedRoomA_Physics` and `RedRoomB_Physics`. `RedRoomB` is the second phase: the same hall built upside down, 97 m
+below the first, so that the party can fight "on the ceiling" without the game turning gravity. The stage loads
+`RedRoomB`'s levels, `RedRoomA`'s light level (it holds the lights for both), the maze's time set and its sky
+(`IslandSky_DayMaze`). Floor at -15479, flat over 48 m by 48 m; walls 24.2 to 24.7 m from the centre, so radius 24 m:
+every summon course but Odin's (24.9 m) and Phoenix's offers it. Character light: `DoorA_1` from the maze's time set.
+
+The first phase (`RedRoomA`) was tried first and dropped: its massive-environment terrain drew the floor, the
+colonnade and the vault but not the tall walls on two sides, whatever else was loaded and whatever the renderer's
+settings; the same terrain turned 180 degrees drew nothing. The second hall draws in full.
 
 ### Planned stages that do not work yet
 

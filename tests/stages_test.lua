@@ -40,7 +40,7 @@ for _, stage in ipairs(catalogue.stages) do
     assert(stage.radius_m > 0 and stage.unlock, stage.id .. " size and unlock")
     assert(stage.id ~= stages.VANILLA, "reserved id")
 end
-eq(world, 6, "six open-world stages"); eq(streamed, 10, "ten stages from other maps")
+eq(world, 6, "six open-world stages"); eq(streamed, 11, "eleven stages from other maps")
 for _, stage in ipairs(catalogue.stages) do
     assert(#stage.anchor == 3, stage.id .. " anchor")
     assert(stage.enabled == false or #stage.levels > 0, stage.id .. " levels")
@@ -111,7 +111,7 @@ eq(stages.blocked(grasslands, phoenix, context({ continent = "EASTC" }), move), 
 
 -- What the picker offers
 local options, left_out = stages.options(catalogue, ordinary, context(), defaults)
-eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,gilgamesh,gilgamesh_garden,midgar_outskirts", "every stage for an ordinary course, anywhere")
+eq(ids(options), "vanilla,grasslands,junon,corel,gongaga,cosmo,nibel,lifestream,space_rock,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,gilgamesh,gilgamesh_garden,midgar_outskirts,red_dragon", "every stage for an ordinary course, anywhere")
 eq(#left_out, 0, "nothing left out")
 eq(ids(stages.options(catalogue, odin, context(), defaults)), "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden,midgar_outskirts", "what is big enough for Odin")
 eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress = 2000, flag = function(n) return n == "stfWorldReport_Finish_NIBLA_025" end }), defaults)),
@@ -121,7 +121,7 @@ eq(ids(stages.options(catalogue, ordinary, context({ cleared = false, progress =
 eq(ids(stages.options(catalogue, ordinary, context({ can_stream = false }), defaults)), "vanilla", "nothing without the helper")
 options, left_out = stages.options(catalogue, ordinary, context({ can_stream = false }), move)
 eq(ids(options), "vanilla,corel,gongaga,cosmo,nibel", "moved: the west's arenas")
-eq(#left_out, 12, "moved: two east arenas and ten stages that can only be streamed left out")
+eq(#left_out, 13, "moved: two east arenas and eleven stages that can only be streamed left out")
 eq(#stages.options(catalogue, course("COL30_NIBLS_01_Free_Colvr"), context(), defaults), 0, "Shinra Manor course: no picker")
 -- Another mod's courses: recognised by the title it puts on screen and by its title id
 local index = stages.title_index(catalogue)
@@ -131,6 +131,17 @@ eq(stages.course_by_title(index, "$menu_Colosseum_CourseTitle_COL99_TrainingDumm
 assert(#stages.options(catalogue, dummy, context(), defaults) > 1, "Training Dummy course: offered stages")
 assert(#stages.options(catalogue, course("COL11_TutorialBtl_01_Cloud_Vr"), context(), defaults) > 1, "tutorial course: offered stages")
 eq(#stages.options(catalogue, nil, context(), defaults), 0, "unknown course: no picker")
+-- Replay: the last stage picked on any course goes on top, when this course can use it
+options = stages.options(catalogue, ordinary, context(), defaults, { last = "red_dragon" })
+eq(options[1].id, "red_dragon", "replay on top")
+eq(options[1].name, "Replay: Temple of the Ancients", "replay label")
+eq(options[1].replay, true, "marked as the replay row")
+eq(options[2].id, "vanilla", "then the simulator's own stage")
+eq(#options, 19, "the stage keeps its own row too")
+eq(stages.selected_index(options, ordinary, { [ordinary.key] = "red_dragon" }), 19, "the course's own choice is marked on its own row")
+eq(ids(stages.options(catalogue, odin, context(), defaults, { last = "red_dragon" })),
+    "vanilla,grasslands,lifestream,space_rock,grasptropod,gilgamesh_garden,midgar_outskirts", "no replay where the stage does not fit")
+eq(stages.options(catalogue, ordinary, context(), defaults, { last = "vanilla" })[1].id, "vanilla", "no replay of the simulator's own stage")
 
 -- What a streamed stage loads, and where
 local plan = stages.stream_plan(corel, { X = -200000, Y = -100000, Z = 10000 }, defaults)
@@ -200,7 +211,7 @@ eq(stages.continent_of("Something_Else", catalogue.vr_stage), nil, "unknown volu
 -- Experimental stages are not offered unless asked for
 local plain = stages.parse_settings("")
 eq(plain.experimental, false, "experimental is off by default")
-eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock,mythril_golem,gi_nattak,galian_beast,gilgamesh_garden,midgar_outskirts", "only the working stages by default")
+eq(ids(stages.options(catalogue, ordinary, context(), plain)), "vanilla,lifestream,space_rock,mythril_golem,gi_nattak,galian_beast,gilgamesh_garden,midgar_outskirts,red_dragon", "only the working stages by default")
 eq(stages.blocked(corel, ordinary, context(), plain), "not working yet", "an arena stage by default")
 eq(stages.blocked(void, ordinary, context(), plain), nil, "the white void by default")
 

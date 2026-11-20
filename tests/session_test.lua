@@ -110,11 +110,13 @@ local game, saved, logged = fake(), {}, {}
 local session = new(game, {}, saved, logged)
 local course, options, start = session.course_selected(MU, defaults)
 eq(course.key, "COL30_GRASA_03_Free_vr", "course recognised")
-eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh,gilgamesh_garden,midgar_outskirts",
+eq(names(options), "vanilla,grasslands,gongaga,cosmo,nibel,lifestream,space_rock,grasptropod,gi_nattak,gilgamesh,gilgamesh_garden,midgar_outskirts,red_dragon",
     "every unlocked stage with 18 m of room, from either continent")
 eq(start, 1, "picker starts on the simulator")
 session.choose(course, "gi_nattak")
-eq(saved[1], "COL30_GRASA_03_Free_vr = gi_nattak\n", "choice saved")
+eq(saved[1], "COL30_GRASA_03_Free_vr = gi_nattak\nlast = gi_nattak\n", "choice saved, and kept as the last stage for Replay")
+local _, again = session.course_selected(MU, defaults)
+eq(again[1].name, "Replay: Cave of the Gi", "Replay on top next time")
 local stage = session.course_confirmed(100, defaults)
 eq(stage.id, "gi_nattak", "chosen stage used")
 local gi = stages.find(catalogue, "gi_nattak")
@@ -243,7 +245,7 @@ eq(stage, nil, "no helper: simulator stage"); eq(why, "gi_nattak: needs the leve
 game = fake({ cleared = false, flags = { stfWorldReport_Finish_NIBLA_025 = true } })
 session = new(game, { COL30_GRASA_01_Free_vr = "gongaga" })
 course, options = session.course_selected(PLAIN, defaults)
-eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,midgar_outskirts",
+eq(names(options), "vanilla,nibel,mythril_golem,grasptropod,anuran_suppressor,gi_nattak,galian_beast,midgar_outskirts,red_dragon",
     "the unlocked arena and the story bosses beaten by this point")
 stage, why = session.course_confirmed(0, defaults)
 eq(stage, nil, "locked choice not used"); eq(why, "gongaga: locked", "locked reason")
@@ -298,6 +300,40 @@ eq(#game.blacks, 1, "black while waiting")
 session.tick(1 + session_module.HOLD_PATIENCE + session_module.BLACK_AFTER)
 eq(game.blacks[#game.blacks], false, "never left in the dark")
 
+-- A fight that begins behind the black screen is held still until the screen lifts, then let go
+game = fake()
+game.battle, game.holds = false, {}
+function game.in_battle() return game.battle end
+function game.hold_fight(on) game.holds[#game.holds + 1] = on; return true end
+session = new(game, { COL30_GRASA_03_Free_vr = "gi_nattak" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+session.tick(1)
+eq(#game.holds, 0, "no hold before the fight")
+game.battle = true
+session.tick(1)
+eq(game.holds[1], true, "fight held behind the black screen")
+session.tick(1)
+eq(#game.holds, 1, "held once")
+game.loaded.all = true
+session.tick(2); session.tick(2 + session_module.BLACK_AFTER)
+eq(game.blacks[#game.blacks], false, "black screen lifted")
+eq(game.holds[#game.holds], false, "fight let go with it")
+eq(#game.holds, 2, "let go once")
+-- and let go when the visit ends while still black
+game = fake()
+game.holds = {}
+function game.in_battle() return true end
+function game.hold_fight(on) game.holds[#game.holds + 1] = on; return true end
+session = new(game, { COL30_GRASA_03_Free_vr = "gi_nattak" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+session.tick(1)
+game.inside = false
+session.tick(2); session.tick(2 + session_module.LEAVE_GRACE)
+eq(game.holds[#game.holds], false, "let go when the visit ends")
 -- The simulator never starts: release after the timeout
 game = fake()
 session = new(game, { COL30_GRASA_03_Free_vr = "nibel" })

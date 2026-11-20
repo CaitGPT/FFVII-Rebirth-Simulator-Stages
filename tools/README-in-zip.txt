@@ -10,17 +10,26 @@ game's own choice window asks you to choose a stage:
   Cave of the Gi         - where Gi Nattak is fought
   Shinra Manor           - the basement where the Galian Beast is fought
   Midgar Outskirts       - outside Sector 5's wall, where Zack fights in the prologue
+  Temple of the Ancients - the Red Dragon's hall, as in that fight's second phase
 The first two are from the final battle and unlock once you have finished the
 game; Gilgamesh's Garden once his quests are complete; Midgar Outskirts from the
-start; the other three as the story reaches them. (Spoiler note: the stages come from the story.)
+start; the other four as the story reaches them. (Spoiler note: the stages come from the story.)
 A stage is offered only for courses whose enemies have room on it.
-The choice is remembered for each course.
+The choice is remembered for each course, and the first row, "Replay: <stage>",
+brings back the last stage you picked.
 
-TO UPDATE from 1.0.0 or 1.1.0, extract over the old folder.
+TO UPDATE from an earlier version, extract over the old folder.
 
 REQUIRES: game version 1.005 (tested on the Epic Games Store version) and
 RE-UE4SS FF7R (UE4SS 3.0.1) with a fix for 1.005, such as our UE4SS 1.005 Fix:
   https://www.nexusmods.com/finalfantasy7rebirth/mods/2521
+
+LINUX / STEAM DECK / STEAM MACHINE (Proton): 1.3.0 changes how the mod's native
+helper starts, after a crash at start-up on Proton with 1.2.0. We cannot test
+Proton ourselves yet. UE4SS needs the Steam launch option
+  WINEDLLOVERRIDES="dwmapi=n,b" %command%
+If the game still crashes, please send us SimulatorStages/stages-helper-trace.txt
+and your UE4SS log.
 
 INSTALL
 1. Close the game.

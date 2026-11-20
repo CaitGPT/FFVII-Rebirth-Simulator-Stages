@@ -828,6 +828,82 @@
         "/Game/Level/Game/Field/4000-MIDGR/GridPhys/4000-MIDGR_GridPhys_3001003"
       ],
       "levels_note": "From the owner's reference shot of Zack's prologue fight. Territories 4000MIDGR_mob_01 and _02 share this centre. Levels: the 020_5thOutWall set that the area's EndStreamingVolume_5thOutWall loads here (terrain, light, effects, glow, the gate, physics), the day time set, and the outer wall's four collision cells with their physics cells (with one cell the ground ended about 6 m east of the centre). Live 2026-11-19: rocky ground, fences, the Sector 5 wall, the plate, the reactor and fires; 517 actors shown, 31 lights. The three downed helicopters (VE0015_00_FallenHeli_Standard) are placed by the story script and their model is not in memory here, so they are not included (owner: not needed)."
+    },
+    {
+      "id": "red_dragon",
+      "name": "Temple of the Ancients",
+      "boss": "Red Dragon (second phase)",
+      "kind": "streamed",
+      "enabled": true,
+      "region": "3110-TEMPL",
+      "territory": "TEMPL_RedDragon",
+      "anchor": [
+        -33296.0,
+        -73165.0,
+        -15479.0
+      ],
+      "anchor_xy_from": "the territory's centre (-33380, -72720) moved 0.8 m east and 4.5 m south: live 2026-11-20 the walls are 24.2 m (north, south) and 24.7 m (east, west) away from here, symmetric",
+      "anchor_z_from": "the second-phase hall's floor: live 2026-11-20 the capsule probe found it flat at -15479 over 48 m by 48 m, with a 1.6 m ledge round the edge",
+      "radius_m": 24.0,
+      "radius_from": "live 2026-11-20: from the anchor the nearest wall is 24.15 m away (24 directions, capsule 60 cm up)",
+      "unlock": {
+        "progress": 13190
+      },
+      "unlock_from": "the fight's scenes (EV_FOREE_8010 to 8090) are at Chapt_0013_180; 13190 is where the game stops streaming the next room (RedRoomB's DeactivateProgress), after the fight",
+      "sky_level": "/Game/Level/Game/Field/0001-WORLD/Layout/Lighting/Island/0001-WORLD_IslandSky_DayMaze",
+      "sky_from": "CutSceneList (8800-FOREE): the maze scenes EV_FOREE_1020 and 1030 (1030 streams MazeRoomA_Boss) name Sky_Island / IslandSky_DayMaze; the fight's own scenes 8020 and 8090 set the TimeSet_Maze switch",
+      "own_ground": true,
+      "light_environment": "Maze_DoorA_1",
+      "light_environment_from": "live 2026-11-20 (owner: the characters were too dark): the hall has no lamps of its own (RedRoomA_Light's are all round the first-phase hall, 97 m up), so characters take their light from a light environment. With the simulator's own (0000-COMON_VR_Light) still on they were near-black; of TimeSet_Maze's two (DoorA_1, DoorA_2, switched by its accessor), DoorA_1 alone lit and shaded them, DoorA_2 alone was darker, and PLEA_MazeRoomA or TimeSet_Maze_2th's alone washed the picture out",
+      "move_brightness_probes": true,
+      "show_classes": [
+        "EndEnvironmentStaticMeshActor",
+        "PointLight",
+        "SpotLight",
+        "EndNiagaraActor",
+        "MassiveEnvironmentActor"
+      ],
+      "levels": [
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomB_Terrain_Strip",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomBTree_Terrain_Strip",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_016_RedRoomBGrass_Terrain_Strip",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomB_Gimmick",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomB_Emissive",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomB_Effect",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_026_RedRoomB_Physics",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/AutoGenCollision/3110-TEMPL_026_RedRoomB_Terrain_Grid_4002004",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_025_RedRoomA_Light",
+        "/Game/Level/Game/Field/3110-TEMPL/Layout/3110-TEMPL_TimeSet_Maze"
+      ],
+      "levels_note": "Issue 3; owner 2026-11-20: the fight's second phase, where gravity reverses and the party fights on the ceiling. The game does that by moving the fight to a second, upside-down copy of the hall, RedRoomB, 97 m below the first (its pieces are rolled 180 degrees), which the fight's physics volume (MazeRoomA_Boss_Physics) loads with the first. Levels: RedRoomB's terrain, tree, grass, gimmick, emissive, effects and physics, its collision cell (4002004), RedRoomA's light level (its lights reach down to -15866, covering both halls) and the maze's time set. The first-phase hall (RedRoomA) was tried first: its massive-environment terrain drew the floor, the colonnade and the ceiling but not the tall patterned walls on two sides, whatever was loaded beside it or set in the renderer. RedRoomB draws in full. The stone pillars of the first phase are enemies and are not included.",
+      "render_settings": {
+        "r.MassiveEnvironment.UseShadowHZBControlPoints": 0,
+        "r.MassiveEnvironment.UseShadowHZBMeshlets": 0,
+        "r.MassiveEnvironment.UseShadowHZBWithCameraDepthReprojection": 0,
+        "r.MassiveEnvironment.ShadowFixedLOD": 0
+      },
+      "render_settings_from": "live 2026-11-20 (owner: the light shifted across the walls when moving): the massive-environment shadow culling, off for the visit; the party was lit more evenly and the sunlit slab steadier. Put back after the visit",
+      "lamp": {
+        "actor": "SpotLight_1",
+        "offset": [
+          3200.0,
+          0.0,
+          3000.0
+        ],
+        "pitch": -40.0,
+        "yaw": 180.0,
+        "intensity": 560000.0,
+        "outer_cone": 35.0,
+        "inner_cone": 24.5,
+        "radius": 12000.0,
+        "shadows": true,
+        "color": [
+          0.62,
+          0.8,
+          1.0
+        ]
+      },
+      "lamp_from": "live 2026-11-20 (owner: the lighting was uneven and unnatural, walls glaring white over a dark floor; then, of two looks shown, preferred this warm one, a little less orange): this hall is the first-phase hall built upside down, so its colonnade is at the top and the game's sun only reaches the upper walls. With the sun's shadows off the floor lit pale, so it takes the sun; the hall's enclosure blocks it at every angle and side tried. One of the light level's unused spotlights (all round the first-phase hall, off), moved inside the colonnade on the side the sun comes from and aimed down into the hall, lights the floor and walls warmly. 80 m out the colonnade's depth blocked it; a soft shadowless fill from above with the sun halved read flatter (`exp-look1`). Owner: a little less orange; the orange is the strong light saturating the warm stone, not the lamp (white, colour temperature off), so a cool tint at full strength (0.62, 0.8, 1.0) turned it golden; 60 percent strength stayed red and only darkened (exp-tint1 to 4)"
     }
   ]
 }

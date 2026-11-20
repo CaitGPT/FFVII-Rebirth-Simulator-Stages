@@ -138,8 +138,21 @@ function M.new(deps)
         self.shown_since, self.shown_checked_at, self.waiting_logged = nil, nil, nil
         self.prepared, self.prepared_at, self.prepare_tries = nil, nil, nil
         self.lights_waiting = nil
+        if self.fight_held and game.hold_fight then game.hold_fight(false) end
+        if game.restore_render_settings then game.restore_render_settings() end
         if self.blacked and game.black_screen then game.black_screen(false, 0) end
-        self.blacked, self.dressed_at = nil, nil
+        self.blacked, self.dressed_at, self.fight_held, self.centre = nil, nil, nil, nil
+    end
+
+    -- The stage's light environment, then its own look (lamp, render settings): after its
+    -- lights are on, and again whenever they are shown again.
+    local function light_up()
+        if self.stage.light_environment and game.apply_light_environment then
+            log("light environment\t" .. tostring(game.apply_light_environment(self.stage)))
+        end
+        if game.apply_stage_look and (self.stage.lamp or self.stage.render_settings) then
+            log("look\t" .. tostring(game.apply_stage_look(self.stage, self.centre)))
+        end
     end
 
     local function dress(steps)
@@ -181,7 +194,7 @@ function M.new(deps)
             log("select\t" .. course.key .. "\t" .. why)
             return course, {}, 1
         end
-        local options, left_out = stages.options(catalogue, course, context, settings)
+        local options, left_out = stages.options(catalogue, course, context, settings, choices)
         log("select\t" .. course.key .. "\t" .. #options .. " options\t" .. table.concat(left_out, "; "))
         if #options < 2 then return course, {}, 1 end
         return course, options, stages.selected_index(options, course, choices)
@@ -190,6 +203,7 @@ function M.new(deps)
     -- The player picked a stage for a course. Remembered until changed.
     function self.choose(course, id)
         choices[course.key] = id
+        if id ~= stages.VANILLA then choices[stages.LAST_KEY] = id end
         if deps.save_choices then deps.save_choices(choices) end
         log("choice\t" .. course.key .. "\t" .. id)
     end
@@ -238,7 +252,7 @@ function M.new(deps)
             self.original = original
             log(string.format("relocate\t%s\t%.0f\t%.0f\t%.0f", stage.id, location.X, location.Y, location.Z))
         end
-        self.state, self.stage, self.volume = "armed", stage, volume
+        self.state, self.stage, self.volume, self.centre = "armed", stage, volume, original.location
         self.armed_at, self.settings = now, settings
         -- Only once armed: raising them runs game code that can re-enter this mod's tick, which while "idle" would
         -- put them straight back (seen 2026-11-18).
@@ -322,6 +336,9 @@ function M.new(deps)
                 if not self.activated_at then
                     self.activated_at = now
                     if self.stage.fit then log("fit\t" .. tostring(game.fit_stage(self.stage, self.plan))) end
+                    if self.stage.move_brightness_probes and game.move_brightness_probes then
+                        log("brightness probes\t" .. tostring(game.move_brightness_probes(self.stage, self.plan)))
+                    end
                     -- The stage's lights go on only once the simulator's lighting levels have been hidden (below), never
                     -- before: on a later visit the stage's levels are cached and ready before the game has even shown
                     -- the simulator's lighting, which then arrives over the stage's lights and leaves it dull (the
@@ -331,9 +348,15 @@ function M.new(deps)
                     self.lights_waiting = (waiting or 0) > 0
                     log("activate\t" .. tostring(shown) .. (self.lights_waiting and ("\tlights wait: " .. tostring(waiting)) or "")
                         .. "\t" .. since_arrival() .. " after arrival")
+                    if not self.lights_waiting then
+                        light_up()
+                    end
                 elseif not self.reactivated and now - self.activated_at >= M.REACTIVATE_AFTER then
                     self.reactivated = true
                     log("activate again\t" .. tostring(game.reactivate_stage(self.stage)))
+                    if not self.lights_waiting then
+                        light_up()
+                    end
                     if #self.releasing == 0 and next(self.release_sent) == nil then fast_streaming(false) end
                 end
             end
@@ -376,6 +399,7 @@ function M.new(deps)
                     if self.lights_waiting then
                         self.lights_waiting = nil
                         log("lights\t" .. tostring(game.show_stage_lights()))
+                        light_up()
                     end
                 end
             elseif self.redress_at and now >= self.redress_at then
@@ -386,16 +410,28 @@ function M.new(deps)
             if self.lights_waiting and self.activated_at and now - self.activated_at >= M.LIGHTS_PATIENCE then
                 self.lights_waiting = nil
                 log("lights\t" .. tostring(game.show_stage_lights()) .. "\tthe simulator's lighting never all showed")
+                light_up()
             end
             -- The black screen lifts once the stage is in, set up and lit, and the simulator's look is gone; or, if that
             -- never happens, after HOLD_PATIENCE plus BLACK_AFTER, so the player is never left in the dark.
             if self.blacked then
+                -- A fight that begins behind the black screen is held still until it lifts (players on faster
+                -- machines than ours saw the fight start while it was up).
+                local fighting = game.in_battle and game.in_battle()
                 local done = self.dressed_once and self.activated_at and not self.lights_waiting
                     and now - self.dressed_at >= M.BLACK_AFTER
+                if fighting and not self.fight_held and not done and game.hold_fight then
+                    self.fight_held = game.hold_fight(true)
+                    if self.fight_held then log("fight held\t" .. since_arrival() .. " after arrival") end
+                end
                 local overdue = now - self.arrived_at >= M.HOLD_PATIENCE + M.BLACK_AFTER
                 if done or overdue then
                     self.blacked = nil
                     log("black screen\toff\t" .. since_arrival() .. " after arrival" .. (done and "" or "\tgave up waiting"))
+                    if self.fight_held then
+                        self.fight_held = nil
+                        log("fight released\t" .. tostring(game.hold_fight(false)))
+                    end
                     game.black_screen(false, M.BLACK_FADE)
                 end
             end

@@ -6,7 +6,8 @@ Junon Colosseum's helper (experiments/junon-foyer/native/src/main.cpp) took a lo
 game calls ProcessEvent from worker threads, and a level load from one of them crashes the async loader. Rather than
 rewrite that, this script copies four sections of it unchanged (the game-thread check, the code-byte checks, the
 loader-idle check and the safe-point gate), and wraps them with this mod's own small request loop (helper_glue.cpp).
-find_addresses.hpp is copied whole. Both repositories are ours.
+find_addresses.hpp started as a copy of Junon's and is now kept here (see the note at its end). Both repositories are
+ours.
 
 Re-run it when Junon's helper gains a fix in one of those sections; the line anchors below are checked, so a moved
 section stops the script instead of copying the wrong lines.
@@ -89,6 +90,6 @@ out = "\n".join([
 ])
 target = ROOT / "native" / "src" / "main.cpp"
 target.write_text(out, encoding="utf-8", newline="\n")
-(ROOT / "native" / "src" / "find_addresses.hpp").write_text(
-    (source_dir / "find_addresses.hpp").read_text(encoding="utf-8"), encoding="utf-8", newline="\n")
-print(f"wrote {target.relative_to(ROOT)} ({len(out.splitlines())} lines) and find_addresses.hpp")
+# find_addresses.hpp was copied from Junon too until 2026-11-19; it now has this mod's guarded QwordsEqual (for
+# Proton), so it is kept here and not overwritten.
+print(f"wrote {target.relative_to(ROOT)} ({len(out.splitlines())} lines)")

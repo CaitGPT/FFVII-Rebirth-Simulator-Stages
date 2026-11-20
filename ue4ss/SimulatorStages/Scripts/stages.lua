@@ -164,9 +164,13 @@ function M.stream_plan(stage, simulator_target, settings, serial)
     return plan
 end
 
--- What the picker offers for a course: the simulator's own stage first, then every stage the course can use.
--- Returns options ({ id, name }) and, for the log, the stages left out with the reason.
-function M.options(catalogue, course, context, settings)
+-- The remembered choices also keep the last stage picked on any course, under this key (no course key is this).
+M.LAST_KEY = "last"
+
+-- What the picker offers for a course: the simulator's own stage first, then every stage the course can use. When the
+-- last stage picked on any course (`choices.last`) is one of those, "Replay: <name>" goes at the very top, so it is one
+-- press away (owner, 2026-11-20). Returns options ({ id, name, replay }) and, for the log, the stages left out.
+function M.options(catalogue, course, context, settings, choices)
     local options, left_out = {}, {}
     if not course or course.excluded then return options, left_out end
     options[1] = { id = M.VANILLA, name = "Combat Simulator" }
@@ -174,6 +178,15 @@ function M.options(catalogue, course, context, settings)
         local why = M.blocked(stage, course, context, settings)
         if why then left_out[#left_out + 1] = stage.id .. ": " .. why
         else options[#options + 1] = { id = stage.id, name = stage.name } end
+    end
+    local last = choices and choices[M.LAST_KEY]
+    if last and last ~= M.VANILLA then
+        for i = 2, #options do
+            if options[i].id == last then
+                table.insert(options, 1, { id = last, name = "Replay: " .. options[i].name, replay = true })
+                break
+            end
+        end
     end
     return options, left_out
 end
@@ -215,7 +228,7 @@ end
 function M.selected_index(options, course, choices)
     local id = choices[course.key]
     for i, option in ipairs(options) do
-        if option.id == id then return i end
+        if option.id == id and not option.replay then return i end
     end
     return 1
 end
