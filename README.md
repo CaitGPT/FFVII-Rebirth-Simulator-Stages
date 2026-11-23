@@ -54,8 +54,9 @@ while you fight, and removes them when you leave.
 
 ## Requirements
 
-- FINAL FANTASY VII REBIRTH for PC, game version **1.005**. We test on the Epic Games Store version. The Steam version
-  needs the helper to search the game's code for what it uses; we test that search on the Epic copy.
+- FINAL FANTASY VII REBIRTH for PC, game version **1.005**. We test on the Epic Games Store and Steam versions. On the
+  Steam version the helper searches the game's code for what it uses (`tools/scan_game_exe.py` runs the same search
+  on an exe file).
 - **Linux, Steam Deck and Steam Machine (Proton).** Version 1.2.0 crashed the game at start-up for a player on Proton.
   1.3.0 changes how the native helper starts (see the changelog). We cannot run Proton ourselves, so this is not yet
   confirmed. UE4SS itself needs the Steam launch option `WINEDLLOVERRIDES="dwmapi=n,b" %command%` there. If the game

@@ -4,9 +4,9 @@
 
 - **Stages load without other mods**: players reported about 40 seconds of black screen at the start of a fight,
   then the standard simulator instead of the stage. The level helper only loaded a stage's levels while the game ran
-  a Blueprint actor's per-frame event. The unmodified game has no such actor; our test setup had one from other
-  mods, so we never saw the fault. The helper now also uses the camera's per-frame update when no actor event
-  comes. Found and checked on the Steam 1.005 build; it applies to every store.
+  a Blueprint actor's per-frame event. The unmodified game has no such actor; our test setup had one, from a
+  community mod loader we had installed, so we never saw the fault. The helper now also uses the camera's per-frame
+  update when no actor event comes. Reproduced and fixed on both the Steam and the Epic Games copy of 1.005.
 - **No long wait when the helper does not answer**: if the level helper gives no answer within about 10 seconds of
   the fight starting, the fight goes ahead on the standard simulator straight away.
 - **Better reports**: `stages-helper.txt` now has a `diag` line saying how often the helper had a chance to load
