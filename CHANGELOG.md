@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.3.1 (unreleased)
+## 1.3.1 (2026-11-23)
 
 - **Stages load without other mods**: players reported about 40 seconds of black screen at the start of a fight,
   then the standard simulator instead of the stage. The level helper only loaded a stage's levels while the game ran
