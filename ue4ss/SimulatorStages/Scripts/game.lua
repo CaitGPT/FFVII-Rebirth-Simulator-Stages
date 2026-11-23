@@ -499,6 +499,7 @@ function M.helper_poll(now)
     end
     helper.ready = text:match("ready\t1") ~= nil
     helper.loading = text:match("loading\t0") == nil
+    helper.queued = tonumber(text:match("queued\t(%d+)"))
     if helper.loading then helper.idle_since = nil else helper.idle_since = helper.idle_since or now end
 end
 
@@ -510,6 +511,14 @@ function M.settled(now, since, idle_seconds, blind_seconds)
         return helper.idle_since ~= nil and now - helper.idle_since >= idle_seconds
     end
     return now - since >= blind_seconds
+end
+
+-- The helper's last heartbeat in a few words, for the log when a stage does not load.
+function M.helper_summary(now)
+    now = now or os.time()
+    return string.format("helper: ready %s, heartbeat %s, loader %s, %s queued", tostring(helper.ready),
+        helper.changed_at and ((now - helper.changed_at) .. " s ago") or "never seen",
+        helper.loading and "busy" or "idle", tostring(helper.queued or "?"))
 end
 
 function M.can_stream(now)
@@ -543,16 +552,16 @@ end
 -- What the helper said about an instance: "loaded", "unloaded", "refused" or nil (nothing yet). The last word wins.
 -- The file is read once and kept for a fifth of a second: a stage of 77 levels asks about each of them every tick,
 -- and reading the whole file for every one of them ran on the game thread.
-local acks, acks_read_at = {}, nil
+local acks, ack_details, ack_lines, acks_read_at = {}, {}, 0, nil
 function M.stream_state(name)
     local now = os.clock()
     if not acks_read_at or now - acks_read_at >= 0.2 then
-        acks, acks_read_at = {}, now
+        acks, ack_details, ack_lines, acks_read_at = {}, {}, 0, now
         local file = io.open(MOD_DIR .. "stages-ack.txt", "rb")
         if file then
             for line in file:lines() do
-                local who, what = line:match("^([%w_]+)\t(%a+)")
-                if who then acks[who] = what end
+                local who, what, rest = line:match("^([%w_]+)\t(%a+)\t?([^\r]*)")
+                if who then acks[who], ack_details[who], ack_lines = what, rest, ack_lines + 1 end
             end
             file:close()
         end
@@ -560,7 +569,28 @@ function M.stream_state(name)
     return acks[name]
 end
 
+-- What the helper said, with its reason or timing ("refused load_refused", "loaded 412ms"), or "no answer". For the
+-- log when a stage does not load: players' logs then say why (2026-11-22).
+function M.stream_detail(name)
+    local state = M.stream_state(name)
+    if not state then return "no answer" end
+    local rest = ack_details[name]
+    return (rest and rest ~= "") and (state .. " " .. rest) or state
+end
+
 function M.stream_ready(name) return M.stream_state(name) == "loaded" end
+
+-- How many answers the helper has written since it started (its file only grows during a game session).
+function M.ack_count()
+    M.stream_state("")
+    return ack_lines
+end
+
+-- Seconds the package loader has been idle, by the helper's last heartbeat; nil while busy or without a helper.
+function M.loader_idle_for(now)
+    if not helper.idle_since then return nil end
+    return (now or os.time()) - helper.idle_since
+end
 
 -- The helper kept the stream it loaded, and unloads it.
 function M.stream_release(name)

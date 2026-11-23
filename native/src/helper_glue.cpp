@@ -71,6 +71,66 @@ namespace
     {
         if(!faulted.exchange(true)) Say(std::string(code)+": "+logLine+" Streamed stages are off.");
     }
+    // Diagnostics (2026-11-23). Two Steam 1.005 players' helpers ran for minutes with requests queued and served none;
+    // their files could not say which condition held them. These counters say it: how many safe-point calls of each
+    // kind arrived, how many were dropped before arming or off the game thread, how many Blueprint ticks were actors,
+    // and, with a request waiting, whether the per-frame gate or the busy loader held it. They change nothing the
+    // helper does. They go into stages-helper.txt twice a second, and into the trace every 10 s while a request has
+    // waited that long (at most 30 lines), with the class names of the first few ticks that were not actors.
+    namespace Diag
+    {
+        std::atomic<uint64_t> seen[2]{}, notArmed[2]{}, offThread[2]{};   // [0] ReceiveTick, [1] BlueprintModifyCamera
+        uint64_t actorTicks=0, otherTicks=0, gateShut=0, deferred=0, served=0, servedAtCamera=0;   // game thread only
+        int Index(const char* kind) { return std::strcmp(kind,"receive_tick")==0 ? 0 : 1; }
+        std::string Line()
+        {
+            return "tick_seen "+std::to_string(seen[0].load())+" not_armed "+std::to_string(notArmed[0].load())
+                  +" off_thread "+std::to_string(offThread[0].load())+" actor "+std::to_string(actorTicks)
+                  +" not_actor "+std::to_string(otherTicks)+" | camera_seen "+std::to_string(seen[1].load())
+                  +" not_armed "+std::to_string(notArmed[1].load())+" off_thread "+std::to_string(offThread[1].load())
+                  +" | waiting: gate_shut "+std::to_string(gateShut)+" deferred "+std::to_string(deferred)
+                  +" served "+std::to_string(served)+" at_camera "+std::to_string(servedAtCamera);
+        }
+        std::string Narrow(const std::wstring& wide)
+        {
+            std::string out;
+            for(wchar_t c:wide) out+=(c>=32 && c<127) ? char(c) : '?';
+            return out;
+        }
+        void Tick(RC::Unreal::UObject* object,bool receiveTick,bool actor)
+        {
+            if(!receiveTick) return;
+            if(actor){ ++actorTicks; return; }
+            ++otherTicks;
+            static int sampled=0;
+            if(sampled>=5 || !object) return;
+            ++sampled;
+            std::string name="?";
+            try { if(auto* type=object->GetClassPrivate()) name=Narrow(type->GetName()); } catch(...) {}
+            Trace("diag: a ReceiveTick that is not an actor's: class "+name);
+        }
+        // The first few camera updates used as a world context: their class and the actor found for them.
+        void Camera(RC::Unreal::UObject* object,RC::Unreal::UObject* context)
+        {
+            static int sampled=0;
+            if(sampled>=3) return;
+            ++sampled;
+            std::string name="?", owner="none";
+            try { if(object && object->GetClassPrivate()) name=Narrow(object->GetClassPrivate()->GetName()); } catch(...) {}
+            try { if(context && context->GetClassPrivate()) owner=Narrow(context->GetClassPrivate()->GetName()); } catch(...) {}
+            Trace("camera update as world context: class "+name+", actor "+owner);
+        }
+        // With a request waiting 10 s or more, a trace line every 10 s.
+        void Waiting(ULONGLONG now,bool empty,ULONGLONG oldest,size_t queued)
+        {
+            static ULONGLONG next=0;
+            static int lines=0;
+            if(empty || oldest<10000 || now<next || lines>=30) return;
+            next=now+10000;
+            ++lines;
+            Trace("diag: "+std::to_string(queued)+" queued, oldest "+std::to_string(oldest)+" ms; "+Line());
+        }
+    }
 // ==== COPIED SECTIONS GO HERE ====
     // ---- this mod's own request loop ----
 
@@ -224,11 +284,23 @@ namespace
         const std::string path=Shared("stages-helper.txt");
         {
             std::ofstream out(path+".tmp",std::ios::trunc);
-            out<<"tick\t"<<now<<"\nready\t"<<(Loader::Verify()&&!faulted.load()?1:0)<<"\nloading\t"<<(loading?1:0)<<"\nqueued\t"<<queue.size()<<"\n";
+            out<<"tick\t"<<now<<"\nready\t"<<(Loader::Verify()&&!faulted.load()?1:0)<<"\nloading\t"<<(loading?1:0)<<"\nqueued\t"<<queue.size()<<"\n"
+               <<"diag\t"<<Diag::Line()<<"\n";
         }
         std::error_code ec;
         std::filesystem::rename(path+".tmp",path,ec);
     }
+    // The actor a camera update belongs to: the camera modifier's owner (the player's camera manager), or the object
+    // itself if it is an actor. Steam 1.005 with no other mods (2026-11-23): no Blueprint actor ticks at all, so 1.3.0
+    // never had a world context and served nothing; the camera update comes every frame there.
+    RC::Unreal::UObject* CameraContext(RC::Unreal::UObject* object)
+    {
+        if(!object) return nullptr;
+        if(object->IsA<RC::Unreal::AActor>()) return object;
+        RC::Unreal::UObject* outer=object->GetOuterPrivate();
+        return outer && outer->IsA<RC::Unreal::AActor>() ? outer : nullptr;
+    }
+    constexpr ULONGLONG CameraAfter=250;   // ms without an actor's tick before the camera update serves instead
     // Every game-thread ProcessEvent of a Blueprint tick or camera update: take new requests, and serve at most one.
     void AtSafePoint(RC::Unreal::UObject* object,RC::Unreal::UFunction* function,const char* kind)
     {
@@ -239,13 +311,28 @@ namespace
             const ULONGLONG now=GetTickCount64();
             const bool verified=Loader::Verify() && !faulted.load();
             const bool loading=verified && Loader::Busy();
+            Diag::Waiting(now,queue.empty(),queue.empty()?0:now-queue.front().at,queue.size());
             Beat(now,loading);
             if(verified){
                 Intake(now);
-                // The world context has to be an actor in the world: an actor's own tick.
-                const bool actorTick=std::strcmp(kind,"receive_tick")==0 && object && object->IsA<RC::Unreal::AActor>();
-                if(!queue.empty() && actorTick && SafePoint::Open(object,function) &&
-                   (!loading || (!queue.front().unload && now-queue.front().at>=MaxDefer))){   // an unload searches the game's objects: only while idle
+                // The world context has to be an actor in the world: an actor's own tick, or, when no actor has
+                // ticked for CameraAfter, the actor that owns the camera update.
+                static ULONGLONG lastActorTick=0;
+                const bool receiveTick=std::strcmp(kind,"receive_tick")==0;
+                const bool actorTick=receiveTick && object && object->IsA<RC::Unreal::AActor>();
+                if(actorTick) lastActorTick=now;
+                Diag::Tick(object,receiveTick,actorTick);
+                RC::Unreal::UObject* context=actorTick?object:nullptr;
+                if(!receiveTick && !queue.empty() && now-lastActorTick>CameraAfter){
+                    context=CameraContext(object);
+                    Diag::Camera(object,context);
+                }
+                const bool open=!queue.empty() && context && SafePoint::Open(object,function);
+                const bool mayServe=open && (!loading || (!queue.front().unload && now-queue.front().at>=MaxDefer));   // an unload searches the game's objects: only while idle
+                if(!queue.empty() && context) { if(!open) ++Diag::gateShut; else if(!mayServe) ++Diag::deferred; }
+                if(mayServe){
+                    ++Diag::served;
+                    if(!actorTick) ++Diag::servedAtCamera;
                     const Request r=queue.front();
                     queue.erase(queue.begin());
                     std::string why;
@@ -259,7 +346,7 @@ namespace
                             else ok=UnloadStream(stream,why);
                             if(found!=streams.end()) streams.erase(found);
                         }else{
-                            RC::Unreal::UObject* stream=LoadLevel(object,r.package,r.name,r.x,r.y,r.z,r.yaw,why);
+                            RC::Unreal::UObject* stream=LoadLevel(context,r.package,r.name,r.x,r.y,r.z,r.yaw,why);
                             ok=stream!=nullptr;
                             if(ok) streams[r.name]=stream;
                         }
@@ -304,7 +391,7 @@ namespace
         SimulatorStagesHelper()
         {
             ModName = STR("Simulator Stages level helper");
-            ModVersion = STR("1.3.0");
+            ModVersion = STR("1.3.1");
             ModDescription = STR("Loads a stage's levels at the combat simulator's position for the Simulator Stages mod");
             ModAuthors = STR("CaitGPT");
         }
@@ -315,18 +402,33 @@ namespace
             std::filesystem::remove(Shared("stages-ack.txt"),ec);
             std::filesystem::remove(Shared("stages-helper.txt"),ec);
             std::filesystem::remove(Shared("stages-helper-trace.txt"),ec);
-            Trace("start: helper 1.3.0");
+            Trace("start: helper 1.3.1");
             SafePoint::Init();
-            Trace("start: names found");
+            Trace("start: names found, ReceiveTick "+std::to_string(SafePoint::receiveTick)+", BlueprintModifyCamera "
+                  +std::to_string(SafePoint::modifyCamera));
             const bool checked=CheckGameGuarded();
             Trace(checked ? (faulted.load() ? "start: game checks done, streamed stages off" : "start: game checks done")
                           : "start: game checks faulted, streamed stages off");
             if(!checked) Fault("SS-CHECK","reading the game's code failed.",L"");
+            // UE4SS keeps ProcessEvent callbacks in a plain std::vector with no lock: the game thread walks it on
+            // every ProcessEvent, and each mod adds to it from its own thread (a Lua mod on its first
+            // ExecuteInGameThread). Once it holds ours, the next addition outgrows it and moves the list while the
+            // game thread may be walking it. Under Proton UE4SS starts while the game is still busy starting, and the
+            // game died there every time: right after BPModLoaderMod's first ExecuteInGameThread (2026-11-19 and
+            // -20 logs). Room for many now means no later addition moves the list.
+            // Only an empty list: by now the hook is installed, and moving a list another C++ mod has already joined
+            // would be the same bug once. The UE4SS 1.005 Fix (1.1.1+) reserves every list earlier, when all are empty.
+            for(auto* list:{&RC::Unreal::Hook::StaticStorage::ProcessEventPreCallbacks,&RC::Unreal::Hook::StaticStorage::ProcessEventPostCallbacks})
+                if(list->empty() && list->capacity()<256) list->reserve(256);
+            Trace("start: callback list room "+std::to_string(RC::Unreal::Hook::StaticStorage::ProcessEventPreCallbacks.capacity())
+                  +", holding "+std::to_string(RC::Unreal::Hook::StaticStorage::ProcessEventPreCallbacks.size()));
             RC::Unreal::Hook::RegisterProcessEventPreCallback([](auto* object,auto* function,void*) {
                 const char* kind=SafePoint::Kind(function);
                 if(!kind) return;                 // a name compare on every ProcessEvent, nothing more
-                if(!Armed()) return;              // nothing on the game thread until ArmDelay after start-up
-                if(!OnGameThread()) return;       // engine work only where the loader keeps its state
+                const int k=Diag::Index(kind);
+                Diag::seen[k].fetch_add(1,std::memory_order_relaxed);
+                if(!Armed()){ Diag::notArmed[k].fetch_add(1,std::memory_order_relaxed); return; }   // nothing on the game thread until ArmDelay after start-up
+                if(!OnGameThread()){ Diag::offThread[k].fetch_add(1,std::memory_order_relaxed); return; }   // engine work only where the loader keeps its state
                 AtSafePoint(object,function,kind);
             });
             Trace("start: callback registered");

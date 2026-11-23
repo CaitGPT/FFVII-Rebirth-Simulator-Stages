@@ -22,6 +22,11 @@ M.RELEASE_PATIENCE = 30 -- seconds an unload may go unanswered before it stops h
 M.RELEASE_IDLE = 4    -- seconds the game's loader must have been idle after a visit before its levels are unloaded
 M.GC_SPREAD_SECONDS = 70 -- seconds the spread-out garbage collection stays on after the last unload (the engine purges every 61 s)
 M.HOLD_PATIENCE = 40  -- seconds after arrival the black screen may wait for a stage to load and be set up
+M.ANSWER_PATIENCE = 10 -- seconds after arrival with no answer at all from the level helper before the visit goes on
+                       -- as the plain simulator (two Steam 1.005 players, 2026-11-22: the helper took the requests
+                       -- and answered none, and the black screen waited the full HOLD_PATIENCE)
+M.ANSWER_IDLE = 3     -- ...and only once the game's loader has been idle this long: the helper may keep an unload
+                      -- waiting while the game loads, but answers at once when it is idle
 M.BLACK_AFTER = 1     -- seconds after the stage is fully set up before the black screen fades out
 M.BLACK_FADE = 0.5    -- seconds the black screen takes to fade out
 
@@ -142,6 +147,7 @@ function M.new(deps)
         if game.restore_render_settings then game.restore_render_settings() end
         if self.blacked and game.black_screen then game.black_screen(false, 0) end
         self.blacked, self.dressed_at, self.fight_held, self.centre = nil, nil, nil, nil
+        self.acks_before, self.answered, self.unanswered = nil, nil, nil
     end
 
     -- The stage's light environment, then its own look (lamp, render settings): after its
@@ -241,6 +247,7 @@ function M.new(deps)
                 return nil, "level request refused"
             end
             self.plan, self.sent = plan, first
+            self.acks_before, self.answered, self.unanswered = game.ack_count and game.ack_count() or nil, nil, nil
             log(string.format("stream\t%s\t%d levels\t%.0f\t%.0f\t%.0f", stage.id, #plan,
                 plan[1].location.X, plan[1].location.Y, plan[1].location.Z))
         elseif steps.relocate then
@@ -263,7 +270,7 @@ function M.new(deps)
     -- Sends more of a large stage's level requests as the helper answers the earlier ones, keeping at most
     -- REQUEST_BATCH unanswered. Once a second.
     local function top_up(now)
-        if not self.plan or (self.sent or #self.plan) >= #self.plan or self.topped_at == now then return end
+        if not self.plan or self.unanswered or (self.sent or #self.plan) >= #self.plan or self.topped_at == now then return end
         self.topped_at = now
         local waiting = 0
         for i = 1, self.sent do
@@ -278,18 +285,35 @@ function M.new(deps)
 
     -- Whether every level of a streamed stage is loaded and showing. Reported once each way.
     local function watch_stream(now)
-        if not self.plan or self.ready or self.watched_at == now then return end
+        if not self.plan or self.ready or self.unanswered or self.watched_at == now then return end
         self.watched_at = now -- once a second is plenty: each look reads the helper's file
+        -- No answer at all from the level helper: after ANSWER_PATIENCE, with the game's loader idle a while, the visit
+        -- goes on as the plain simulator (the black screen lifts below) and the stage is not set up later.
+        if not self.answered and self.acks_before and game.ack_count then
+            if game.ack_count() > self.acks_before then
+                self.answered = true
+            elseif now - self.arrived_at >= M.ANSWER_PATIENCE and (game.loader_idle_for(now) or 0) >= M.ANSWER_IDLE then
+                self.unanswered = true
+                log("stream\tno answer from the level helper after " .. (now - self.arrived_at) .. " s\tplain simulator"
+                    .. (game.helper_summary and ("\t" .. game.helper_summary(now)) or ""))
+                return
+            end
+        end
         local missing = {}
         for _, item in ipairs(self.plan) do
-            if not game.stream_ready(item.name) then missing[#missing + 1] = item.package end
+            if not game.stream_ready(item.name) then
+                -- With the helper's answer, so a player's log says why (2026-11-22: four levels, no reason given).
+                local detail = game.stream_detail and (" (" .. game.stream_detail(item.name) .. ")") or ""
+                missing[#missing + 1] = item.package .. detail
+            end
         end
         if #missing == 0 then
             self.ready = true
             log("stream\tready\t" .. (now - self.arrived_at) .. " s after arrival")
         elseif not self.reported and now - self.arrived_at >= M.STREAM_PATIENCE then
             self.reported = true
-            log("stream\tNOT loaded after " .. M.STREAM_PATIENCE .. " s\t" .. table.concat(missing, "; "))
+            log("stream\tNOT loaded after " .. M.STREAM_PATIENCE .. " s\t" .. table.concat(missing, "; ")
+                .. (game.helper_summary and ("\t" .. game.helper_summary(now)) or ""))
         end
     end
 
@@ -424,7 +448,7 @@ function M.new(deps)
                     self.fight_held = game.hold_fight(true)
                     if self.fight_held then log("fight held\t" .. since_arrival() .. " after arrival") end
                 end
-                local overdue = now - self.arrived_at >= M.HOLD_PATIENCE + M.BLACK_AFTER
+                local overdue = now - self.arrived_at >= M.HOLD_PATIENCE + M.BLACK_AFTER or self.unanswered
                 if done or overdue then
                     self.blacked = nil
                     log("black screen\toff\t" .. since_arrival() .. " after arrival" .. (done and "" or "\tgave up waiting"))

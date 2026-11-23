@@ -300,6 +300,52 @@ eq(#game.blacks, 1, "black while waiting")
 session.tick(1 + session_module.HOLD_PATIENCE + session_module.BLACK_AFTER)
 eq(game.blacks[#game.blacks], false, "never left in the dark")
 
+-- The level helper answers nothing at all (two Steam 1.005 players, 2026-11-22): the plain simulator after
+-- ANSWER_PATIENCE once the game's loader has been idle ANSWER_IDLE, not the whole HOLD_PATIENCE
+local function silent_helper(idle_for)
+    local g = fake()
+    g.acks, g.idle = 5, idle_for
+    function g.ack_count() return g.acks end
+    function g.loader_idle_for() return g.idle end
+    function g.helper_summary() return "helper: summary" end
+    return g
+end
+game, logged = silent_helper(nil), {}
+session = new(game, { COL30_GRASA_03_Free_vr = "nibel" }, nil, logged)
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+local asked = #game.requested
+game.inside = true
+session.tick(1)
+session.tick(1 + session_module.ANSWER_PATIENCE)
+eq(#game.blacks, 1, "still black while the game's loader is busy")
+game.idle = session_module.ANSWER_IDLE
+session.tick(2 + session_module.ANSWER_PATIENCE)
+eq(game.blacks[#game.blacks], false, "black screen lifted after no answer")
+eq(has(logged, "no answer from the level helper"), true, "said why")
+eq(has(logged, "helper: summary"), true, "with the helper's state")
+session.tick(3 + session_module.ANSWER_PATIENCE)
+eq(#game.requested, asked, "no more requests once it gave up")
+game.loaded.all = true
+session.tick(4 + session_module.ANSWER_PATIENCE); session.tick(10 + session_module.ANSWER_PATIENCE)
+eq(game.count("activate:nibel"), 0, "a late load is not set up over the plain simulator")
+eq(game.count("hide"), 0, "the simulator keeps its look")
+game.inside = false
+session.tick(30 + session_module.ANSWER_PATIENCE); session.tick(30 + session_module.ANSWER_PATIENCE + session_module.LEAVE_GRACE)
+eq(session.busy(), false, "visit over")
+-- one answer is enough: then the stage may take its time, as before
+game = silent_helper(session_module.ANSWER_IDLE)
+session = new(game, { COL30_GRASA_03_Free_vr = "nibel" })
+session.course_selected(MU, defaults)
+session.course_confirmed(0, defaults)
+game.inside = true
+session.tick(1)
+game.acks = 6
+session.tick(2); session.tick(2 + session_module.ANSWER_PATIENCE)
+eq(#game.blacks, 1, "still black: the helper is answering")
+session.tick(1 + session_module.HOLD_PATIENCE + session_module.BLACK_AFTER)
+eq(game.blacks[#game.blacks], false, "then the usual time limit")
+
 -- A fight that begins behind the black screen is held still until the screen lifts, then let go
 game = fake()
 game.battle, game.holds = false, {}
