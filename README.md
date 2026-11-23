@@ -1,5 +1,10 @@
 # FFVII Rebirth Simulator Stages
 
+> **Also part of [Simulator Upgrade](https://github.com/CaitGPT/FFVII-Rebirth-Simulator-Upgrade)**, which adds equipment inside the simulator, a Custom Training
+> course for any opponent, group or round, and meters. Use one or the other: if both are installed, this mod handles
+> the stages and Simulator Upgrade's copy stays off.
+
+
 A FINAL FANTASY VII REBIRTH PC mod that lets you fight Chadley's Combat Simulator courses on other stages. Pick a
 course, choose a stage, and the fight takes place there instead of on the simulator's block arena. Eight stages are in
 this version: **Edge of Creation** and **Inside the Lifestream** from the final battle, **Gilgamesh's Garden**,
